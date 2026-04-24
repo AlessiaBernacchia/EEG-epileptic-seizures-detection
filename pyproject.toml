@@ -1,0 +1,13 @@
+# pyproject.toml defines build system settings and package metadata.
+# It is an alternative modern format to setup.py and works with pip.
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eeg_seizure_detection"
+version = "0.1.0"
+description = "Package metadata for EEG seizure detection project"
+requires-python = ">=3.8"
+dependencies = []
