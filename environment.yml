@@ -12,7 +12,10 @@ dependencies:
   - seaborn
   - mne
   - jupyter
+  - requests
+  - tqdm
   - pip
   - pip:
     - tensorflow
     - pyedflib
+    - wfdb

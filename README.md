@@ -2,11 +2,23 @@
 The goal of this project is to develop methods to detect epileptic seizures from electroencephalographic (EEG) signals. The project involves analyzing brain activity recordings to distinguish between normal and status epilepticus and exploring how temporal patterns in EEG signals can be used for reliable and interpretable classification.
 
 ## Dataset
-The dataset used in this project is the "Epileptic Seizure Recognition" dataset, which contains EEG recordings from 23 patients. Each recording is labeled as either normal or status epilepticus, providing a basis for training and evaluating classification models.
+The dataset used in this project is the "Epileptic Seizure Recognition" dataset, which contains EEG recordings from 23 patients (and ocassionally other signals that we will exclude from analysis). Each recording is labeled as either normal or status epilepticus, providing a basis for training and evaluating classification models.
 
+- providers: Children's Hospital Boston and the Massachusetts Institute of Technology (MIT) 
 - [dataset source link](https://physionet.org/content/chbmit/1.0.0/)
 - [paper describing the dataset](https://physionet.org/content/chbmit/1.0.0/shoeb-icml-2010.pdf)
-- size: 23 patients, 24 channels, 1-second segments, sampled at 256 Hz
+- size: 23 patients, 23 channels, about 4-hours segments, sampled at 256 Hz
+
+(the 24th patient `chb24` was added to this collection in December 2010, and is not currently included in `SUBJECT-INFO`)
+
+**Highlights of the providers**:
+- Protected health information (PHI) in the original .edf files has been replaced with surrogate identifiers, so we cannot link recordings to specific patients or demographics.
+- Dates in the original .edf files have been replaced by surrogate dates that do not correspond to actual recording dates, so we cannot analyze temporal patterns across recordings based on date information.
+- The dataset is imbalanced, with more normal recordings than seizure recordings.
+- Gaps in the recordings are 10 seconds or less, which may affect the continuity of the data and require careful handling during preprocessing.
+- The beginning ([) and end (]) of each seizure is annotated in the `.seizure` annotation files that accompany each of the files listed in `RECORDS-WITH-SEIZURES`.
+
+> **Note**: The dataset is large and may require significant computational resources for processing and analysis. We will focus on a subset of the data to ensure that we can complete the project within the given deadline.
 
 ## Methodology
 The project will involve the following steps:
@@ -16,25 +28,23 @@ The project will involve the following steps:
 4. **Model evaluation**: Split data into training and test sets, evaluate using metrics such as accuracy, confusion matrix, ROC curves, and AUC, and analyze false positives/false negatives and their implications.
 5. **Extension (optional)**: Explore early seizure detection (prediction before onset), patient-specific vs. general models, and interpretability of learned features.
 
-## Setup Environment and Data
-To set up the environment and prepare the data for analysis, follow these steps:
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/AlessiaBernacchia/EEG-epileptic-seizures-detection.git
-   ```
-2. **Navigate to the project directory**:
-   ```bash
-    cd EEG-epileptic-seizures-detection
-    ```
-3. **Install environment with required dependencies**:
-   ```bash
-    conda env create --file environment.yml
-    ```
-4. **Activate the environment**:
-    ```bash
-     conda activate eeg-seizure-detection
-     ```
+## Pipeline to follow and Documentation
+The project will be organized into a clear and modular pipeline, with separate scripts for data preprocessing, feature extraction, model training, and evaluation. Each step will be documented in detail to ensure reproducibility and clarity of the analysis.
+
+1. [**Setup and Environment**](doc/setup_env.md)
+2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
+...
+## Data Download and Preprocessing
+The dataset is very large: it contains 23 patients, each with at most 43 recordings (usually 4 hours records each one) of 24 channels sampled at 256 Hz. This results in a large amount of data that can be challenging to manage and process. Given the deadline of the project (in two weeks), we focus on a subset of patients, channels and time windows to ensure that we can complete the analysis in time. We will select a few patients and channels that are most relevant for seizure detection, and we will segment the data into manageable time windows for feature extraction and model training.
+
+Some problems we've encountered with the dataset:
+- gaps are 10 seconds or less
+- all protected health information (PHI) in the original .edf files has been replaced with surrogate identifiers, so we cannot link recordings to specific patients or demographics
+- the dataset is imbalanced, with more normal recordings than seizure recordings
+- Dates in the original .edf files have been replaced by surrogate dates that do not correspond to actual recording dates, so we cannot analyze temporal patterns across recordings based on date information.
+
 5. **Download the dataset**:
    - Download the "Epileptic Seizure Recognition" dataset from [PhysioNet](https://physionet.org/content/chbmit/1.0.0/) and place the data files in the `data/` directory of the project.
 6. **Run the data preprocessing script**:
    ```bash
+   
