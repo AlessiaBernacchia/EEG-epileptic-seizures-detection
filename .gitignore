@@ -419,3 +419,4 @@ FodyWeavers.xsd
 
 # Database files
 data/
+eeg_seizure_detection.egg-info/
