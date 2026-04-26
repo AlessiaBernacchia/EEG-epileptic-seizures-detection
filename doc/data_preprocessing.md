@@ -11,7 +11,7 @@ Since the whole dataset is quite large and contains a lot of patients and data a
 5. [Split the data into train, validation and test sets](#balancing--splitting)
 
 ## Data Information Retrieval and Analysis
-[Notebook](../notebooks/collect_info.ipynb)
+[Notebook](../notebooks/collection/collection.ipynb)
 
 The first step is to retrieve and analyze the dataset information.
 We will use the `SUBJECT-INFO.txt` file to understand the demographics and clinical characteristics of the patients, as well as the summary files for each patient to identify the timing and duration of seizures. This information will help us in selecting the appropriate subsets of data for our analysis and in understanding the distribution of seizure and non-seizure events across the patients.

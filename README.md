@@ -34,17 +34,3 @@ The project will be organized into a clear and modular pipeline, with separate s
 1. [**Setup and Environment**](doc/setup_env.md)
 2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
 ...
-## Data Download and Preprocessing
-The dataset is very large: it contains 23 patients, each with at most 43 recordings (usually 4 hours records each one) of 24 channels sampled at 256 Hz. This results in a large amount of data that can be challenging to manage and process. Given the deadline of the project (in two weeks), we focus on a subset of patients, channels and time windows to ensure that we can complete the analysis in time. We will select a few patients and channels that are most relevant for seizure detection, and we will segment the data into manageable time windows for feature extraction and model training.
-
-Some problems we've encountered with the dataset:
-- gaps are 10 seconds or less
-- all protected health information (PHI) in the original .edf files has been replaced with surrogate identifiers, so we cannot link recordings to specific patients or demographics
-- the dataset is imbalanced, with more normal recordings than seizure recordings
-- Dates in the original .edf files have been replaced by surrogate dates that do not correspond to actual recording dates, so we cannot analyze temporal patterns across recordings based on date information.
-
-5. **Download the dataset**:
-   - Download the "Epileptic Seizure Recognition" dataset from [PhysioNet](https://physionet.org/content/chbmit/1.0.0/) and place the data files in the `data/` directory of the project.
-6. **Run the data preprocessing script**:
-   ```bash
-   

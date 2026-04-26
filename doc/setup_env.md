@@ -28,9 +28,9 @@ if you want to use the project as a package and import its modules, you can inst
    ```bash
     python -m pip install -e .
    ```
-If you want to install the package without editable mode, simply run:
-   ```bash
-    python -m pip install .
-   ```
+   If you want to install the package without editable mode, simply run:
+      ```bash
+      python -m pip install .
+      ```
 
-> Important: the package name `eeg_seizure_detection` is the install target, not the Python import root. Your actual import root is `utils` because that is the package folder found by `find_packages()`.
+   > Important: the package name `eeg_seizure_detection` is the install target, not the Python import root. Your actual import root is `utils` because that is the package folder found by `find_packages()`.
