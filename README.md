@@ -34,3 +34,5 @@ The project will be organized into a clear and modular pipeline, with separate s
 1. [**Setup and Environment**](doc/setup_env.md)
 2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
 ...
+
+## Foldeer structure:
