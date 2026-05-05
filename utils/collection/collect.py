@@ -96,8 +96,8 @@ def collect_all_rec_of(patient_id, target_dir=None):
         print(f"\n[OK] Download of chb{p_id} recordings completed.")
     except Exception as e:
         print(f"[ERROR] Failed to download recordings: {e}")
-import requests
-from tqdm import tqdm
+
+
 
 def collect_rec_of(patient_id, target_dir=None, info_dir=None, non_seizure_limit=2):
     """
