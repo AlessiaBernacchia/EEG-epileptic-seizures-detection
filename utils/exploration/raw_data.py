@@ -11,7 +11,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
-def show_info(df):
+def show_info(df, save=False, save_path=None, name="global_info_overview.png"):
     """
     Advanced dashboard for EEG dataset analysis.
     Features: Pie Chart (Absolute counts), Age by Sex (Stacked), 
@@ -80,10 +80,14 @@ def show_info(df):
     sns.heatmap(corr_df[numeric_cols].corr(), annot=True, cmap='coolwarm', ax=axes[1, 2])
     axes[1, 2].set_title("Correlation Heatmap")
 
+    if save and save_path is not None:
+        os.makedirs(save_path, exist_ok=True)
+        fig.savefig(save_path / name)
+
     plt.tight_layout()
     plt.show()
 
-def show_seizure_analysis(df, show_global=False, log_scale=True):
+def show_seizure_analysis(df, show_global=False, log_scale=True, save=False, save_path=None, name="global_seizure_info_overview.png"):
     """
     Detailed seizure analysis dashboard.
     Top: Seizure counts per patient (and optionally Global total).
@@ -157,6 +161,10 @@ def show_seizure_analysis(df, show_global=False, log_scale=True):
     ax_bottom.set_xticks(x_pos)
     ax_bottom.set_xticklabels(labels, rotation=45, ha='right', fontsize=12)
     ax_bottom.grid(True, which="both", axis='y', linestyle='--', alpha=0.4)
+
+    if save and save_path is not None:
+        os.makedirs(save_path, exist_ok=True)
+        fig.savefig(save_path / name)
 
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.05) 
