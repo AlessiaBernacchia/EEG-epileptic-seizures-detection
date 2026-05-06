@@ -3,11 +3,12 @@ Since the whole dataset is quite large and contains a lot of patients and data a
 
 1. [Analyse the dataset info provided](#data-information-retrieval-and-analysis)
 2. [Select specific patients based on the meta-analysis](#dataset-selection)
-3. [Select specific EEG channels based on papers](#channel-selection)
-4. [Process the selected data](#signal-processing)
+3. [Process the selected data](#signal-processing)
     - [Filtering](#filtering)
     - [Scaling](#scaling)
     - [Segmentation (Windowing)](#segmentation-windowing)
+    - [Feature extraction](#feature-extraction)
+    - [Labelling](#labelling)
 5. [Split the data into train, validation and test sets](#balancing--splitting)
 
 ## Data Information Retrieval and Analysis
@@ -39,31 +40,47 @@ We decided to select four subjects based on our analysis of seizure durations. W
 - Since Subject 12 is a 2-year-old female, we paired her with ***Subject 13***, another girl of a similar age (3 years old).
 - To ensure diversity in our sample, we also selected two older patients: ***Subject 4***, a 22-year-old male, and ***Subject 19***, a 19-year-old female.
 
-## Channel Selection
-[Notebook](../notebooks/collect_info.ipynb)
-
-Load only 2 or 3 specific EEG channels (e.g., based on the 10-20 system) as recommended by clinical literature to reduce dimensionality.
-
-TODO
-
 ## Signal Processing
+[Notebook](../notebooks/data_preprocessing.ipynb)
+
+The preprocessing phase automates the transformation of high-volume raw signals into structured datasets suitable for Machine Learning models.
 
 ### Filtering
 
-Apply a Bandpass filter (e.g., 0.5 - 40 Hz).
+- **Frequency Filtering**: a Band-pass filter (0.5 – 25 Hz) is applied to each record to eliminate high-frequency noise and low-frequency DC drift, focusing on the most relevant clinical EEG frequencies.
+
+- **Artifact Removal**: the process includes a cleaning step to remove "ghost" channels (labeled `-` and empty) and redundant duplicated channels (such as `T8-P8`), considered as measurement errors, to ensure a unique and consistent input vector.
 
 ### Scaling
 
-Use RobustScaler to handle EEG artifacts and outliers.
+- **Robust Normalization**: signal amplitudes are scaled using `RobustScaler`. This method is chosen specifically for EEG data because it uses the interquartile range, making it resilient to outliers and high-amplitude artifacts commonly found in brain signal recordings.
 
 ## Segmentation (Windowing)
 
-Slice continuous signals into 10-second windows.
+Continuous EEG signals are segmented into fixed-length blocks to prepare for supervised learning:
 
-Label windows as 1 (Seizure) or 0 (Normal) based on the timestamps from metadata.
+- **Window Size**: signals are sliced into windows defined by `WINDOW_SEC` (e.g., 5 or 10 seconds).
+
+- **Overlapping**: to increase the number of available samples and capture transitional patterns between segments, an *overlap strategy* is implemented (the step size is calculated as `win_size * (1 - OVERLAP)`).
+
+**Output Format**: The final data is stored as a 3D tensor with the shape `(number_of_windows, number_of_channels, window_samples)`.
+
+### Feature Extraction
+[Notebook]()
+
+### Labelling
+[Notebook](../notebooks/preprocessing/labeling.ipynb)
 
 ## Balancing & Splitting
 
 Sub-sample the "Normal" windows to balance the classes (though keeping a higher proportion of normal data to remain realistic).
 
 Perform a Subject-Independent or Subject-Specific split into Train, Validation, and Test sets.
+ 
+---
+## Channel Selection
+[Notebook](../notebooks/data_preprocessing.ipynb)
+
+Load only 2 or 3 specific EEG channels (e.g., based on the 10-20 system) as recommended by clinical literature to reduce dimensionality.
+
+TODO
