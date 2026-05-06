@@ -35,4 +35,31 @@ The project will be organized into a clear and modular pipeline, with separate s
 2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
 ...
 
-## Foldeer structure:
+## Folder structure:
+```
+EEG-epileptic-seizures-detection/
+├── data/                       # Git-ignored directory for data storage
+│   ├── raw/                    # Original, immutable data
+│   │   ├── info/               # Meta-data: SUBJECT-INFO and chbxx-summary.txt files
+│   │   └── records/            # selected large .edf brain signal files
+│   └── processed/
+│       ├── ...
+
+├── doc/                        # Project documentation and visualizations
+│   └── src/                    # Exported plots (png) and markdown guides (md)
+│        ├── exploration/       
+│        ├── preprocessing/
+│              ....
+├── notebooks/                  # Experimental Jupyter notebooks
+│   └── collection/             # Notebooks for testing data gathering logic
+├── utils/                      # Core Python package (the logic "engine")
+│   ├── collection/             # Modules for downloading and parsing (collect.py)
+│   ├── exploration/            # Modules for EDA and visualization (raw_data.py)
+│   └── __init__.py             # Makes 'utils' an importable package
+├── .gitignore                  # Instructions on which files Git should ignore (e.g., data/)
+├── environment.yml             # Conda environment specification (Python 3.9 + dependencies)
+├── pyproject.toml              # Modern build system configuration
+├── README.md                   # Main project documentation
+└── setup.py                    # Legacy build script for "editable" mode installation
+```
+
