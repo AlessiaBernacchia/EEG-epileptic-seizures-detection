@@ -220,11 +220,11 @@ def make_info_df(info_dir=None, save_csv=False, csv_path=None):
         sub_info_path = next(info_dir.glob("**/SUBJECT-INFO"), None)
 
     if sub_info_path:
-        df_subjects = pd.read_csv(sub_info_path, sep='\t', names=['Subject', 'Sex', 'Age'])
-        df_subjects['Subject'] = df_subjects['Subject'].str.lower()
+        df_subjects = pd.read_csv(sub_info_path, sep='\t', names=['subject', 'sex', 'age'])
+        df_subjects['subject'] = df_subjects['subject'].str.lower()
     else:
         print("[WARNING] SUBJECT-INFO not found. Demographics will be missing.")
-        df_subjects = pd.DataFrame(columns=['Subject', 'Age', 'Sex'])
+        df_subjects = pd.DataFrame(columns=['subject', 'age', 'sex'])
 
     data_list = []
 
@@ -256,24 +256,24 @@ def make_info_df(info_dir=None, save_csv=False, csv_path=None):
         s_starts = re.findall(r"Seizure \d* ?Start Time: (\d+) seconds", content)
         s_ends = re.findall(r"Seizure \d* ?End Time: (\d+) seconds", content)
         
-        seizure_durations = [int(e) - int(s) for s, e in zip(s_starts, s_ends)]
+        seizure_durations = [float(float(e) - float(s)) for s, e in zip(s_starts, s_ends)]
         
         # 6. Aggregate data for the subject
         data_list.append({
-            'Subject': patient_name,
-            'Sampling_Freq': freq,
-            'Num_Seizures': len(seizure_durations),
-            'Seizure_Durations': seizure_durations,
-            'Avg_Seizure_Dur': pd.Series(seizure_durations).mean() if seizure_durations else 0,
-            'Min_Seizure_Dur': pd.Series(seizure_durations).min() if seizure_durations else 0,
-            'Max_Seizure_Dur': pd.Series(seizure_durations).max() if seizure_durations else 0,
-            'Num_Files': len(file_names)
+            'subject': patient_name,
+            'sampling_freq': freq,
+            'num_seizures': len(seizure_durations),
+            'seizure_durations': seizure_durations,
+            'avg_seizure_dur': pd.Series(seizure_durations).mean() if seizure_durations else 0,
+            'min_seizure_dur': pd.Series(seizure_durations).min() if seizure_durations else 0,
+            'max_seizure_dur': pd.Series(seizure_durations).max() if seizure_durations else 0,
+            'num_files': len(file_names)
         })
 
     df_stats = pd.DataFrame(data_list)
     
     # 7. Merge with demographics
-    final_df = pd.merge(df_stats, df_subjects, on='Subject', how='left')
+    final_df = pd.merge(df_stats, df_subjects, on='subject', how='left')
 
     if save_csv:
         if csv_path is None:
