@@ -5,11 +5,8 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import re
-
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import numpy as np
+import mne
+import warnings
 
 def show_info(df, save=False, save_path=None, name="global_info_overview.png"):
     """
@@ -232,3 +229,188 @@ def show_info_of_patient(df, patient_id):
         plt.xlabel("Duration (seconds)")
         plt.ylabel("Frequency")
         plt.show()
+
+def plot_channel_availability(patient_id, records_dir, cleaned=True, remove_warnings=True):
+    """
+    Heatmap of channel availability from the records.
+    Optionally silences MNE/Python warnings and cleans ghost/duplicate channels.
+    """
+    if remove_warnings:
+        # Silence MNE internal logging
+        mne.set_log_level('ERROR')
+    
+    p_id = f"chb{str(patient_id).zfill(2)}"
+    path = Path(records_dir) / p_id
+    edf_files = sorted(list(path.glob("*.edf")))
+    
+    if not edf_files:
+        print(f"[!] No .edf files found in {path}")
+        return
+
+    file_channels = {}
+    all_unique_channels = set()
+    
+    for f in edf_files:
+        # Context manager to catch and ignore Python RuntimeWarnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw = mne.io.read_raw_edf(f, preload=False, verbose=False)
+            channels = raw.ch_names
+        
+        if cleaned:
+            # 1. Remove ghost channels (dots, dashes, empty strings)
+            channels = [ch for ch in channels if ch.strip() not in ['', '-', '.', '--', '---']]
+            # 2. Filter out channels MNE auto-renames with numbers (like '--0')
+            channels = [ch for ch in channels if not (ch.startswith('--') and ch[2:].isdigit())]
+            # 3. Handle duplicates: keep first occurrence
+            seen = set()
+            channels = [x for x in channels if not (x in seen or seen.add(x))]
+            
+        file_channels[f.name] = channels
+        all_unique_channels.update(channels)
+    
+    if remove_warnings:
+        # Reset log level to default after the loop
+        mne.set_log_level('INFO')
+    
+    all_unique_channels = sorted(list(all_unique_channels))
+    matrix = pd.DataFrame(0, index=all_unique_channels, columns=[f.name for f in edf_files])
+    
+    for f_name, channels in file_channels.items():
+        matrix.loc[channels, f_name] = 1
+
+    plt.figure(figsize=(16, 10))
+    sns.heatmap(matrix, cmap=["#f0f0f0", "#1E90FF"], cbar=False, linewidths=.3, linecolor='white')
+    
+    status = " (Cleaned & Silent)" if cleaned else ""
+    plt.title(f"Channel Consistency: {p_id.upper()}{status}")
+    plt.xlabel("EDF Files")
+    plt.ylabel("EEG Channels")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+def plot_channel_availability_from_summary(patient_id, info_dir, filter_downloaded=True, raw_records_path=None, verbose=False,):
+    """
+    Heatmap of channels from summary.txt. 
+    0: Absent (Grey), 1: Present (Blue), 2: Seizure File (Red).
+    """
+    # helper normalization functions
+    def normalize_filename(name):
+        return str(name).strip()
+
+    def normalize_channel(name):
+        return str(name).strip().upper()
+
+    # 1. Define paths
+    info_dir = Path(info_dir)
+    p_id = f"chb{int(patient_id):02d}"
+    summary_path = info_dir / p_id / f"{p_id}-summary.txt"
+    if not summary_path.exists():
+        summary_path = info_dir / f"{p_id}-summary.txt"
+        if not summary_path.exists():
+            print(f"[ERROR] Summary file not found for {p_id} in {info_dir}")
+            return
+
+    raw_records_path = Path(raw_records_path) if raw_records_path is not None else Path("./data/raw/records")
+
+    if verbose:
+        print(f"[INFO] patient={p_id}")
+        print(f"[INFO] summary_path={summary_path}")
+        print(f"[INFO] raw_records_path={raw_records_path}")
+        print(f"[INFO] filter_downloaded={filter_downloaded}")
+
+    with summary_path.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    # 2. Find channels files
+    file_channels = {}
+    seizure_files = set()
+    all_unique_channels = set()
+    current_montage = []
+    last_f_name = None
+
+    for line in lines:
+        # Update current montage
+        ch_match = re.search(r"Channel \d+: (\S+)", line)
+        if ch_match:
+            ch = normalize_channel(ch_match.group(1))
+            current_montage.append(ch)
+
+        # Reset montage tracking on header lines
+        if "Channels" in line and ("changed" in line.lower() or "in edf" in line.lower()):
+            current_montage = []
+
+        # Map file name to current montage
+        if "File Name:" in line:
+            last_f_name = normalize_filename(line.split(":", 1)[1])
+            file_channels[last_f_name] = list(current_montage)
+            all_unique_channels.update(current_montage)
+
+        # Detect if the current file has seizures
+        if "Number of Seizures in File:" in line and last_f_name:
+            num = int(re.search(r"\d+", line).group())
+            if num > 0:
+                seizure_files.add(last_f_name)
+
+    final_files = list(file_channels.keys())
+
+    # 3. Filter by records downloaded
+    if filter_downloaded:
+        local_path = raw_records_path / p_id
+        if not local_path.exists():
+            print(f"[ERROR] Records folder not found: {local_path}")
+            return
+
+        downloaded_on_disk = sorted(normalize_filename(f.name) for f in local_path.glob("*.edf"))
+        if verbose:
+            print(f"[INFO] downloaded files count={len(downloaded_on_disk)}")
+
+        matched_files = [f for f in final_files if f in downloaded_on_disk]
+        if verbose:
+            print(f"[INFO] matched files count={len(matched_files)}")
+
+        if not matched_files:
+            print(f"[ERROR] No matching EDF files found after filtering for {p_id}")
+            return
+
+        final_files = matched_files
+
+    # 4. Matrix Construction
+    all_unique_channels = sorted(set(all_unique_channels))
+    # Remove placeholder channels like '-'
+    all_unique_channels = [ch for ch in all_unique_channels if ch.strip() and ch != '-']
+    
+    matrix = pd.DataFrame(0, index=all_unique_channels, columns=final_files)
+
+    for f_name in final_files:
+        val = 2 if f_name in seizure_files else 1
+        channels = file_channels.get(f_name, [])
+        if channels:
+            for ch in channels:
+                if ch in matrix.index:
+                    matrix.loc[ch, f_name] = val
+
+    if matrix.empty or matrix.shape[1] == 0 or matrix.shape[0] == 0:
+        print(f"[ERROR] Matrix is empty for {p_id}")
+        return
+
+    matrix_filtered = matrix.loc[(matrix != 0).any(axis=1)]
+    if matrix_filtered.empty:
+        print(f"[ERROR] After removing empty rows, matrix is empty for {p_id}")
+        return
+
+    if verbose:
+        print(f"[INFO] final matrix shape={matrix_filtered.shape}")
+        print(f"[INFO] total nonzero entries={(matrix_filtered != 0).sum().sum()}")
+
+    # 5. Plot with custom 3-color palette
+    fig, ax = plt.subplots(figsize=(20, 12))
+    sns.heatmap( matrix_filtered, cmap=["#f0f0f0", "#1E90FF", "#FF0000"], cbar=False, linewidths=.1, linecolor='white', ax=ax, )
+
+    ax.set_title(f"Channel Consistency: {p_id.upper()} (Red = Seizure)", fontsize=16)
+    ax.set_xlabel("Files", fontsize=12)
+    ax.set_ylabel("EEG Channels", fontsize=12)
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
