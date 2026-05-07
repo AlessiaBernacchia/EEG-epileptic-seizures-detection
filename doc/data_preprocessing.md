@@ -55,7 +55,7 @@ The preprocessing phase automates the transformation of high-volume raw signals 
 
 - **Robust Normalization**: signal amplitudes are scaled using `RobustScaler`. This method is chosen specifically for EEG data because it uses the interquartile range, making it resilient to outliers and high-amplitude artifacts commonly found in brain signal recordings.
 
-## Segmentation (Windowing)
+### Segmentation (Windowing)
 
 Continuous EEG signals are segmented into fixed-length blocks to prepare for supervised learning:
 
@@ -95,16 +95,30 @@ For forecasting, we calculate the `Time-to-Seizure (TTS)` in seconds.
 - ***Post-Ictal/Non-Seizure*** are the windows following a seizure or in files without crisis events are assigned a placeholder (e.g., -1) to be filtered during the forecasting training phase.
 
 ## Balancing & Splitting
-[Notebook](../)
+[Notebook](../notebooks/preprocessing/data_splitting.ipynb)
 
-Sub-sample the "Normal" windows to balance the classes (though keeping a higher proportion of normal data to remain realistic).
+The final stage of the preprocessing pipeline transforms the cleaned feature matrices into curated datasets ready for model training. This stage ensures that the models are trained on balanced data while being evaluated on realistic, chronological sequences.
 
-Perform a Subject-Independent or Subject-Specific split into Train, Validation, and Test sets.
- 
----
-## Channel Selection
-[Notebook](../notebooks/data_preprocessing.ipynb)
+EEG signals are inherently sequential; therefore, we avoid random shuffling across the entire dataset. We divide the data into **Train (70%)**, **Validation (15%)**, and **Test (15%)** sets in strict chronological order. This setup prevents "look-ahead bias" and ensures that the model is always tested on "future" data that it has never seen during training, mimicking a real-world clinical deployment.
 
-Load only 2 or 3 specific EEG channels (e.g., based on the 10-20 system) as recommended by clinical literature to reduce dimensionality.
+The system generates two distinct datasets to support our dual research objectives:
 
-TODO
+**Task 1: Seizure Detection**
+
+The goal of this task is to distinguish between active seizures (ictal) and normal brain activity (inter-ictal).
+
+* **Data Composition**: We preserve all available windows, specifically keeping the **ictal samples** as the target class (Label 1).
+* **Balancing**: Because seizures are rare, we apply **Random Undersampling** to the "Normal" class within the training and validation sets. This creates a 50/50 balance, preventing the model from becoming biased toward the majority "Normal" class.
+* **Target**: The model learns to identify the immediate electrical signature of a seizure.
+
+**Task 2: Seizure Forecasting**
+
+The goal of this task is to predict the "Pre-Ictal" state, the window of time where brain activity begins to change before a physical seizure occurs.
+
+* **Ictal Filtering**: All windows labeled as active seizures are **removed** from the dataset. This ensures the model learns to identify early warning signs in the signal rather than simply detecting an ongoing crisis.
+* **Label Reassignment**: We focus on the high-risk window defined as **1 to 10 minutes before onset**. Windows in this range are labeled as 1 (Pre-Ictal), while all other windows (farther than 10 minutes away) are labeled as 0.
+* **Forecasting Goal**: The model learns to trigger an alert several minutes before the seizure starts, providing a critical window for medical intervention.
+
+## Outputs and metadata
+
+Final datasets for each step are archived in compressed `.npz` format. Each file is self-contained, storing the split features ($X$), labels ($y$), and timestamps ($t$), alongside metadata such as `feature_names` and `channels` to ensure full traceability during the modeling phase.
