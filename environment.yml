@@ -15,6 +15,7 @@ dependencies:
   - ipykernel
   - requests
   - tqdm
+  - imblearn
   - pip
   - pip:
     - tensorflow

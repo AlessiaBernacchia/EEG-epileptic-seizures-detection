@@ -283,51 +283,24 @@ def make_info_df(info_dir=None, save_csv=False, csv_path=None):
     
     return final_df
 
-def get_seizure_lookup(patient_names, info_path):
     """
-    Parses summary files to create a dictionary of seizure intervals.
-    Output format: {'chb04_08': [(6446, 6557)], ...}
+    Show the collected information of a specific patient.
     """
-    seizure_lookup = {}
-    
-    for p_name in patient_names:
-        # path to summary file
-        summary_file = Path(info_path) / p_name / f"{p_name}-summary.txt"
-        
-        # if the folder structure is different
-        if not summary_file.exists():
-            summary_file = Path(info_path) / f"{p_name}-summary.txt"
-            
-        if not summary_file.exists():
-            print(f"Warning: Summary not found for {p_name}")
-            continue
-        
-        # read file
-        with open(summary_file, 'r') as f:
-            content = f.read()
+    p_id = f"chb{str(patient_id).zfill(2)}"
+    patient_row = df[df['Subject'] == p_id]
 
-        # pplit content by "File Name:" to process each EDF record
-        sections = re.split(r'File Name:', content)
-        
-        for section in sections[1:]:
-            # extract file name (remove extension)
-            f_match = re.search(r'(\w+\.edf)', section)
-            if not f_match: continue
-            f_name = f_match.group(1).replace('.edf', '')
-            
-            # find number of seizures
-            n_seiz_match = re.search(r'Number of Seizures in File: (\d+)', section)
-            n_seizures = int(n_seiz_match.group(1)) if n_seiz_match else 0
-            
-            intervals = []
-            if n_seizures > 0:
-                # find all start/end pairs in this section
-                starts = re.findall(r'Seizure (?:\d+ )?Start Time: (\d+) seconds', section)
-                ends = re.findall(r'Seizure (?:\d+ )?End Time: (\d+) seconds', section)
-                
-                for s, e in zip(starts, ends):
-                    intervals.append((int(s), int(e)))
-            
-            seizure_lookup[f_name] = intervals
-            
-    return seizure_lookup
+    if patient_row.empty:
+        print(f"[!] No data found for subject {p_id}")
+        return
+
+    row = patient_row.iloc[0]
+    print(f"\n{'='*30}")
+    print(f"REPORT FOR SUBJECT: {p_id.upper()}")
+    print(f"{'='*30}")
+    print(f"Demographics: Age {row['Age']} | Sex {row['Sex']}")
+    print(f"Recording:    {row['Num_Files']} files | {row['Sampling_Freq']} Hz")
+    print(f"Seizures:     {row['Num_Seizures']} total")
+    if row['Num_Seizures'] > 0:
+        print(f"Durations:    Avg: {row['Avg_Seizure_Dur']:.2f}s | Min: {row['Min_Seizure_Dur']}s | Max: {row['Max_Seizure_Dur']}s")
+        print(f"List (s):     {row['Seizure_Durations']}")
+    print(f"{'='*30}\n")

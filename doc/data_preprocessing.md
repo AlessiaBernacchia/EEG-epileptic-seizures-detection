@@ -3,11 +3,12 @@ Since the whole dataset is quite large and contains a lot of patients and data a
 
 1. [Analyse the dataset info provided](#data-information-retrieval-and-analysis)
 2. [Select specific patients based on the meta-analysis](#dataset-selection)
-3. [Select specific EEG channels based on papers](#channel-selection)
-4. [Process the selected data](#signal-processing)
+3. [Process the selected data](#signal-processing)
     - [Filtering](#filtering)
     - [Scaling](#scaling)
     - [Segmentation (Windowing)](#segmentation-windowing)
+    - [Feature extraction](#feature-extraction)
+    - [Labelling](#labelling)
 5. [Split the data into train, validation and test sets](#balancing--splitting)
 
 ## Data Information Retrieval and Analysis
@@ -39,31 +40,85 @@ We decided to select four subjects based on our analysis of seizure durations. W
 - Since Subject 12 is a 2-year-old female, we paired her with ***Subject 13***, another girl of a similar age (3 years old).
 - To ensure diversity in our sample, we also selected two older patients: ***Subject 4***, a 22-year-old male, and ***Subject 19***, a 19-year-old female.
 
-## Channel Selection
-[Notebook](../notebooks/collect_info.ipynb)
-
-Load only 2 or 3 specific EEG channels (e.g., based on the 10-20 system) as recommended by clinical literature to reduce dimensionality.
-
-TODO
-
 ## Signal Processing
+[Notebook](../notebooks/data_preprocessing.ipynb)
+
+The preprocessing phase automates the transformation of high-volume raw signals into structured datasets suitable for Machine Learning models.
 
 ### Filtering
 
-Apply a Bandpass filter (e.g., 0.5 - 40 Hz).
+- **Frequency Filtering**: a Band-pass filter (0.5 – 25 Hz) is applied to each record to eliminate high-frequency noise and low-frequency DC drift, focusing on the most relevant clinical EEG frequencies.
+
+- **Artifact Removal**: the process includes a cleaning step to remove "ghost" channels (labeled `-` and empty) and redundant duplicated channels (such as `T8-P8`), considered as measurement errors, to ensure a unique and consistent input vector.
 
 ### Scaling
 
-Use RobustScaler to handle EEG artifacts and outliers.
+- **Robust Normalization**: signal amplitudes are scaled using `RobustScaler`. This method is chosen specifically for EEG data because it uses the interquartile range, making it resilient to outliers and high-amplitude artifacts commonly found in brain signal recordings.
 
-## Segmentation (Windowing)
+### Segmentation (Windowing)
 
-Slice continuous signals into 10-second windows.
+Continuous EEG signals are segmented into fixed-length blocks to prepare for supervised learning:
 
-Label windows as 1 (Seizure) or 0 (Normal) based on the timestamps from metadata.
+- **Window Size**: signals are sliced into windows defined by `WINDOW_SEC` (e.g., 5 or 10 seconds).
+
+- **Overlapping**: to increase the number of available samples and capture transitional patterns between segments, an *overlap strategy* is implemented (the step size is calculated as `win_size * (1 - OVERLAP)`).
+
+**Output Format**: The final data is stored as a 3D tensor with the shape `(number_of_windows, number_of_channels, window_samples)`.
+
+### Feature Extraction
+[Notebook](../notebooks/preprocessing/features_&_labels.ipynb)
+
+Feature extraction is essential to transform high-dimensional raw EEG signals into a structured format that machine learning models can effectively interpret. This process preserves critical temporal and spectral characteristics while significantly reducing data complexity. To ensure scalability, we implemented a vectorized and parallelized extraction pipeline that maintains a low memory footprint.
+
+**Feature Categories:**
+- ***Time Domain Statistics***: we calculate *Mean, Standard Deviation, Skewness* and *Kurtosis* to capture the signal's energy distribution and shape.
+
+- **Signal Complexity**: *line Length* is implemented to detect sharp, paroxysmal activity, while the *Petrosian Fractal Dimension* provides a fast measure of non-linear signal complexity.
+
+- **Frequency Domain (PSD)**: using the Welch method, we extract the *average power* in clinical EEG bands: *Delta (0.5–4 Hz), Theta (4–8 Hz), Alpha (8–12 Hz)* and *Beta (12–30 Hz).*
+
+- **Connectivity**: we compute the *Pearson Correlation* between all channel pairs to identify abnormal synchronization between brain regions, which is a key indicator for seizure forecasting.
+
+
+### Labelling
+[Notebook](../notebooks/preprocessing/features_&_labels.ipynb)
+
+We utilize an automated labeling system that synchronizes each processed window with the clinical metadata provided in the patient summary files. This allows us to generate targets for two distinct research objectives:
+
+**Task 1: Binary Classification (Detection)**
+Each window is assigned a `binary label (1 for Seizure, 0 for Normal)`. A window is marked as a seizure if its timeframe overlaps with any ictal interval defined in the summary records. This is used to train models for real-time seizure detection.
+
+**Task 2: Regression (Forecasting)**
+For forecasting, we calculate the `Time-to-Seizure (TTS)` in seconds.
+- ***Ictal Windows*** has the TTS set to 0.
+- ***Pre-Ictal Windows*** has TTS that represents a countdown until the next seizure begins, allowing models to learn early warning patterns.
+- ***Post-Ictal/Non-Seizure*** are the windows following a seizure or in files without crisis events are assigned a placeholder (e.g., -1) to be filtered during the forecasting training phase.
 
 ## Balancing & Splitting
+[Notebook](../notebooks/preprocessing/data_splitting.ipynb)
 
-Sub-sample the "Normal" windows to balance the classes (though keeping a higher proportion of normal data to remain realistic).
+The final stage of the preprocessing pipeline transforms the cleaned feature matrices into curated datasets ready for model training. This stage ensures that the models are trained on balanced data while being evaluated on realistic, chronological sequences.
 
-Perform a Subject-Independent or Subject-Specific split into Train, Validation, and Test sets.
+EEG signals are inherently sequential; therefore, we avoid random shuffling across the entire dataset. We divide the data into **Train (70%)**, **Validation (15%)**, and **Test (15%)** sets in strict chronological order. This setup prevents "look-ahead bias" and ensures that the model is always tested on "future" data that it has never seen during training, mimicking a real-world clinical deployment.
+
+The system generates two distinct datasets to support our dual research objectives:
+
+**Task 1: Seizure Detection**
+
+The goal of this task is to distinguish between active seizures (ictal) and normal brain activity (inter-ictal).
+
+* **Data Composition**: We preserve all available windows, specifically keeping the **ictal samples** as the target class (Label 1).
+* **Balancing**: Because seizures are rare, we apply **Random Undersampling** to the "Normal" class within the training and validation sets. This creates a 50/50 balance, preventing the model from becoming biased toward the majority "Normal" class.
+* **Target**: The model learns to identify the immediate electrical signature of a seizure.
+
+**Task 2: Seizure Forecasting**
+
+The goal of this task is to predict the "Pre-Ictal" state, the window of time where brain activity begins to change before a physical seizure occurs.
+
+* **Ictal Filtering**: All windows labeled as active seizures are **removed** from the dataset. This ensures the model learns to identify early warning signs in the signal rather than simply detecting an ongoing crisis.
+* **Label Reassignment**: We focus on the high-risk window defined as **1 to 10 minutes before onset**. Windows in this range are labeled as 1 (Pre-Ictal), while all other windows (farther than 10 minutes away) are labeled as 0.
+* **Forecasting Goal**: The model learns to trigger an alert several minutes before the seizure starts, providing a critical window for medical intervention.
+
+## Outputs and metadata
+
+Final datasets for each step are archived in compressed `.npz` format. Each file is self-contained, storing the split features ($X$), labels ($y$), and timestamps ($t$), alongside metadata such as `feature_names` and `channels` to ensure full traceability during the modeling phase.
