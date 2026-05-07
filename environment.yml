@@ -14,6 +14,7 @@ dependencies:
   - jupyter
   - requests
   - tqdm
+  - imblearn
   - pip
   - pip:
     - tensorflow
