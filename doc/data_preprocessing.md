@@ -66,12 +66,36 @@ Continuous EEG signals are segmented into fixed-length blocks to prepare for sup
 **Output Format**: The final data is stored as a 3D tensor with the shape `(number_of_windows, number_of_channels, window_samples)`.
 
 ### Feature Extraction
-[Notebook]()
+[Notebook](../notebooks/preprocessing/features_&_labels.ipynb)
+
+Feature extraction is essential to transform high-dimensional raw EEG signals into a structured format that machine learning models can effectively interpret. This process preserves critical temporal and spectral characteristics while significantly reducing data complexity. To ensure scalability, we implemented a vectorized and parallelized extraction pipeline that maintains a low memory footprint.
+
+**Feature Categories:**
+- ***Time Domain Statistics***: we calculate *Mean, Standard Deviation, Skewness* and *Kurtosis* to capture the signal's energy distribution and shape.
+
+- **Signal Complexity**: *line Length* is implemented to detect sharp, paroxysmal activity, while the *Petrosian Fractal Dimension* provides a fast measure of non-linear signal complexity.
+
+- **Frequency Domain (PSD)**: using the Welch method, we extract the *average power* in clinical EEG bands: *Delta (0.5–4 Hz), Theta (4–8 Hz), Alpha (8–12 Hz)* and *Beta (12–30 Hz).*
+
+- **Connectivity**: we compute the *Pearson Correlation* between all channel pairs to identify abnormal synchronization between brain regions, which is a key indicator for seizure forecasting.
+
 
 ### Labelling
-[Notebook](../notebooks/preprocessing/labeling.ipynb)
+[Notebook](../notebooks/preprocessing/features_&_labels.ipynb)
+
+We utilize an automated labeling system that synchronizes each processed window with the clinical metadata provided in the patient summary files. This allows us to generate targets for two distinct research objectives:
+
+**Task 1: Binary Classification (Detection)**
+Each window is assigned a `binary label (1 for Seizure, 0 for Normal)`. A window is marked as a seizure if its timeframe overlaps with any ictal interval defined in the summary records. This is used to train models for real-time seizure detection.
+
+**Task 2: Regression (Forecasting)**
+For forecasting, we calculate the `Time-to-Seizure (TTS)` in seconds.
+- ***Ictal Windows*** has the TTS set to 0.
+- ***Pre-Ictal Windows*** has TTS that represents a countdown until the next seizure begins, allowing models to learn early warning patterns.
+- ***Post-Ictal/Non-Seizure*** are the windows following a seizure or in files without crisis events are assigned a placeholder (e.g., -1) to be filtered during the forecasting training phase.
 
 ## Balancing & Splitting
+[Notebook](../)
 
 Sub-sample the "Normal" windows to balance the classes (though keeping a higher proportion of normal data to remain realistic).
 
