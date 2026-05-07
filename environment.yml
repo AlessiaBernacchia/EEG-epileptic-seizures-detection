@@ -15,9 +15,8 @@ dependencies:
   - ipykernel
   - requests
   - tqdm
-  - imblearn
   - pip
   - pip:
-    - tensorflow
     - pyedflib
     - wfdb
+    - imblearn
