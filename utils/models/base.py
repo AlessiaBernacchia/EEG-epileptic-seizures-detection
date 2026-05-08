@@ -27,6 +27,7 @@ def prepare_scaled_tabular_features(
 
     drop_cols = {
         label_col,
+        "original_channel",
     }
 
     feature_cols = [col for col in data.columns if col not in drop_cols]

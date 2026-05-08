@@ -139,6 +139,8 @@ We explored the chb12 dataset by analyzing both individual files and the concate
   <img src="src/splitting/task2_test_class_distr.png" width="32%" />
 </p>
 
+> Remember to consider that for this task we will _explode the dataset by channels_, then each line will be duplicated for the number of channels.
+
 The diagnostic plots confirm that the class distribution remains imbalanced across all splits.
 
 This is a direct result of our processing pipeline, which performs splitting on a _per-file basis_. For segments with no seizures, the code maintains and splits all the data regardless of the label. Because many segments contain no target events, a strict balancing approach (undersampling the majority class globally) would lead to a significant loss of data, potentially starving the model of the temporal context needed for robust feature extraction. For instance, in subjects like chb12, the ratio of inter-ictal to ictal data can exceed 200:1.
