@@ -41,7 +41,9 @@ predictions = model.predict(X_test_proc)
 **Usage**:
 ```python
 model = NaiveBayesModel(model_name='NaiveBayes')
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -59,7 +61,9 @@ model.train(X_train_proc, y_train)
 **Usage**:
 ```python
 model = SVMModel(model_name='SVM', kernel='rbf', C=1.0)
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -77,7 +81,9 @@ model.train(X_train_proc, y_train)
 **Usage**:
 ```python
 model = KNNModel(model_name='KNN', n_neighbors=5)
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -95,7 +101,9 @@ model.train(X_train_proc, y_train)
 **Usage**:
 ```python
 model = RandomForestModel(model_name='RandomForest', n_estimators=100, max_depth=20)
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -115,7 +123,9 @@ model.train(X_train_proc, y_train)
 **Usage**:
 ```python
 model = XGBModel(model_name='XGBoost', n_estimators=100, max_depth=7, tree_method='hist')
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -133,7 +143,9 @@ model.train(X_train_proc, y_train)
 **Usage**:
 ```python
 model = LGBModel(model_name='LightGBM', n_estimators=100, max_depth=7)
-model.train(X_train_proc, y_train)
+X_proc, y = model.preprocess(df_train, is_training=True)
+model.train(X_proc, y)
+predictions = model.predict(X_test_proc)
 ```
 
 ---
@@ -260,8 +272,19 @@ predictions = model.predict(X_test_rnn, batch_size=32)
 
 All models follow a consistent preprocessing pipeline:
 
+### For Multicollinearitz sensitive models
+Logistic Regression, Support Vector Machines, K-Nearest Neighbors, Naive Bayes, Hidden Markov Chain models
+```markdown
+1. Extract feature columns from DataFrame
+2. Handle missing values (fill with 0)
+3. Scale using RobustScaler
+4. Feature Selection (based on correlation)
+4. Return features and labels
+```
+4. feature Selection (to delete multicollinearity if required from the model)
+
 ### Tabular Features (Baseline & Boosting)
-```python
+```markdown
 1. Extract feature columns from DataFrame
 2. Handle missing values (fill with 0)
 3. Scale using RobustScaler
@@ -269,7 +292,7 @@ All models follow a consistent preprocessing pipeline:
 ```
 
 ### Deep Learning Features
-```python
+```markdown
 1. Extract feature columns
 2. Handle missing values
 3. Min-Max normalization to [0, 1]
