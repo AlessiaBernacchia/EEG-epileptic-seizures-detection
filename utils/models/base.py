@@ -109,7 +109,7 @@ class BaseModel(ABC):
     def grid_search(self):
         raise Exception('NO GRID SEARCH DEFINED!!')
 
-    def hypertune_pipeline(self, df_train, df_val, param_grid, n_jobs=N_JOBS, frac=0.01, **kwargs):
+    def hypertune_pipeline(self, df_train, df_val, param_grid, n_jobs=N_JOBS, frac=1, **kwargs):
         """
         Hypertune, find the best parameters.
         :param df_train: Dataframe with train features and targets.
@@ -124,6 +124,7 @@ class BaseModel(ABC):
         self.model.set_params(**best_params)
         print(f'[{self.model_name}] Train model with best params...')
         self.train_pipeline(df_train, frac=frac)
+        return grid_search
 
     def predict(self, X):
         """

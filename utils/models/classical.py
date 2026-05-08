@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, PredefinedSplit, RandomizedSearchCV
@@ -8,8 +9,16 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import RobustScaler
 from sklearn.svm import SVC
-from xgboost import XGBClassifier
-import lightgbm as lgb
+
+try:
+    from xgboost import XGBClassifier
+except ImportError:
+    XGBClassifier = None
+
+try:
+    import lightgbm as lgb
+except ImportError:
+    lgb = None
 
 from .base import (
     BaseModel,
@@ -19,6 +28,62 @@ from .base import (
     _is_cuda_device,
     prepare_scaled_tabular_features,
 )
+
+
+def _stack_train_val(X_train, y_train, X_val, y_val):
+    if isinstance(X_train, pd.DataFrame):
+        X = pd.concat([X_train, X_val], axis=0)
+    else:
+        X = np.vstack((X_train, X_val))
+    y = np.concatenate((np.asarray(y_train), np.asarray(y_val)))
+    split_index = np.concatenate((
+        -1 * np.ones(len(y_train), dtype=int),
+        np.zeros(len(y_val), dtype=int),
+    ))
+    return X, y, PredefinedSplit(test_fold=split_index)
+
+
+def _search_on_train_val(
+    estimator,
+    X_train,
+    y_train,
+    X_val,
+    y_val,
+    param_grid,
+    n_iter=None,
+    n_jobs=N_JOBS,
+    random_state=RANDOM_STATE,
+    search_type="grid",
+    **kwargs,
+):
+    X, y, split = _stack_train_val(X_train, y_train, X_val, y_val)
+    scoring = kwargs.pop("scoring", "f1_weighted")
+
+    if search_type == "random" and n_iter is not None:
+        search = RandomizedSearchCV(
+            clone(estimator),
+            param_distributions=param_grid,
+            n_iter=n_iter,
+            cv=split,
+            n_jobs=n_jobs,
+            random_state=random_state,
+            scoring=scoring,
+            **kwargs,
+        )
+    else:
+        search = GridSearchCV(
+            clone(estimator),
+            param_grid=param_grid,
+            cv=split,
+            n_jobs=n_jobs,
+            scoring=scoring,
+            **kwargs,
+        )
+
+    search.fit(X, y)
+    print(f"\nBest parameters found for {estimator.__class__.__name__}:")
+    print(search.best_params_)
+    return search
 
 
 class KNNModel(BaseModel):
@@ -51,7 +116,17 @@ class KNNModel(BaseModel):
             model_name=self.model_name,
         )
 
-    def grid_search(self, df_train, df_val, param_grid, max_tuning_samples=50000, n_jobs=N_JOBS, **kwargs) -> list:
+    def grid_search(
+        self,
+        df_train,
+        df_val,
+        param_grid,
+        n_iter=None,
+        max_tuning_samples=50000,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        **kwargs,
+    ):
         """
         Hypertune, find the best parameters.
         :param X_val: Dataframe with validation features.
@@ -62,45 +137,28 @@ class KNNModel(BaseModel):
         # Downsampling for speed
         def downsample_indices(indices, n_samples):
             if len(indices) > n_samples:
-                return np.random.choice(indices, n_samples, replace=False)
+                rng = np.random.default_rng(random_state)
+                return rng.choice(indices, n_samples, replace=False)
             return indices
 
-        X_train_scaled, y_train = self.preprocess(df_train, is_training=True)
-        X_val_scaled, y_val = self.preprocess(df_val, is_training=False)
-
         # sample for tuning
-        train_tuning_idx = downsample_indices(np.arange(len(X_train_scaled)), int(max_tuning_samples * 0.8))
-        val_tuning_idx = downsample_indices(np.arange(len(X_val_scaled)), int(max_tuning_samples * 0.2))
+        train_tuning_idx = downsample_indices(np.arange(len(df_train)), int(max_tuning_samples * 0.8))
+        val_tuning_idx = downsample_indices(np.arange(len(df_val)), int(max_tuning_samples * 0.2))
 
-        X_subset = np.vstack((X_train_scaled[train_tuning_idx], X_val_scaled[val_tuning_idx]))
-        y_subset = np.concatenate((y_train.iloc[train_tuning_idx], y_val.iloc[val_tuning_idx]))
-
-        # Create split indices: -1 for train, 0 for validation
-        split_index = np.concatenate([-1 * np.ones(len(train_tuning_idx)), 0 * np.ones(len(val_tuning_idx))])
-        ps = PredefinedSplit(test_fold=split_index)
-
-        # GridSearchCV
-        print(f"\nStarting tuning on {len(X_subset)} samples...")
-        grid_search = GridSearchCV(
-            KNeighborsClassifier(n_jobs=n_jobs),
-            param_grid=param_grid,
-            cv=ps,
+        print(f"\nStarting tuning on {len(train_tuning_idx) + len(val_tuning_idx)} samples...")
+        grid_search = _search_on_train_val(
+            self.model,
+            df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
+            df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
+            df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
+            df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
+            param_grid,
+            n_iter=n_iter,
             n_jobs=n_jobs,
-            **kwargs
+            search_type="random" if n_iter else "grid",
+            random_state=random_state,
+            **kwargs,
         )
-        grid_search.fit(X_subset, y_subset)
-
-        # print results
-        best_params = grid_search.best_params_
-        print("\nBest parameters found:")
-        print(best_params)
-
-        # Final training on the full dataset with the best parameters
-        model = grid_search.best_estimator_
-        model.fit(X_train_scaled, y_train)
-
-        print(f"\nOptimal model ready: {model}")
-
         return grid_search
 
     def predict_proba(self, X):
@@ -109,13 +167,14 @@ class KNNModel(BaseModel):
         """
         return self.model.predict_proba(X)
 
-
 class XGBModel(BaseModel):
     """
     Implementation of the XGB Baseline model using paper features.
     Inherits from BaseModel.
     """
     def __init__(self, model_name='XGB', device=DEVICE, **kwargs):
+        if XGBClassifier is None:
+            raise ImportError("XGBModel requires xgboost. Install it or skip this model.")
         # Initialize the scikit-learn KNN model
         xgb_internal = XGBClassifier(
             device=device,
@@ -140,7 +199,17 @@ class XGBModel(BaseModel):
             model_name=self.model_name,
         )
 
-    def grid_search(self, df_train, df_val, param_grid, device=DEVICE, n_jobs=N_JOBS, **kwargs):
+    def grid_search(
+        self,
+        df_train,
+        df_val,
+        param_grid,
+        device=DEVICE,
+        n_iter=15,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        **kwargs,
+    ):
         """
         Hypertune, find the best parameters.
         :param X_val: Dataframe with validation features.
@@ -149,9 +218,6 @@ class XGBModel(BaseModel):
         """
 
         print(f'[{self.model_name}] Grid Search...')
-        # preprocess data
-        X_train_scaled, y_train = self.preprocess(df_train, is_training=True)
-        X_val_scaled, y_val = self.preprocess(df_val, is_training=False)
 
         search_n_jobs = 1 if _is_cuda_device(device) else n_jobs
         if _is_cuda_device(device) and n_jobs != 1:
@@ -169,23 +235,23 @@ class XGBModel(BaseModel):
             model_params["n_jobs"] = 1
 
         model = XGBClassifier(**model_params)
+        
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
 
-        random_search = RandomizedSearchCV(
+        random_search = _search_on_train_val(
             model,
-            param_distributions=param_grid,
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
+            n_iter=n_iter,
             n_jobs=search_n_jobs,
-            **kwargs
+            random_state=random_state,
+            search_type="random",
+            **kwargs,
         )
-
-        # Run randomized search on the validation split (kept small by earlier sampling)
-        random_search.fit(X_val_scaled, y_val)
-
-        best_params = random_search.best_params_
-        print("\nBest parameters found:")
-        print(best_params)
-
-        print(f"\nOptimal model ready: {random_search.best_estimator_}")
-
         return random_search
 
 
@@ -195,13 +261,14 @@ class XGBModel(BaseModel):
         """
         return self.model.predict_proba(X)
 
-
 class LGBModel(BaseModel):
     """
     Implementation of the LightGBM model for large-scale embedding classification.
     Optimized for high speed and parallelization.
     """
     def __init__(self, model_name='LGBM', device=DEVICE, n_jobs=N_JOBS, random_state=RANDOM_STATE, **kwargs):
+        if lgb is None:
+            raise ImportError("LGBModel requires lightgbm. Install it or skip this model.")
         # Initialize LightGBM Classifier
         # device can be 'cpu' or 'gpu'
         lgb_internal = lgb.LGBMClassifier(
@@ -228,36 +295,52 @@ class LGBModel(BaseModel):
             model_name=self.model_name,
         )
 
-    def grid_search(self, df_train, df_val, param_grid, n_iter=15, n_jobs=N_JOBS, **kwargs):
+    def grid_search(
+        self,
+        df_train,
+        df_val,
+        param_grid,
+        n_iter=12,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        scoring="f1_weighted",
+        **kwargs,
+    ):
         """
-        Hyperparameter tuning using RandomizedSearchCV for efficiency.
+        Hypertune LightGBM on the fixed train/validation split.
         """
-        print(f'[{self.model_name}] Starting Randomized Search...')
-        X_train_scaled, y_train = self.preprocess(df_train, is_training=True)
-        X_val_scaled, y_val = self.preprocess(df_val, is_training=False)
 
-        # We use a subset for tuning to speed up the process,
-        # but LGBM is fast enough to handle larger chunks than KNN
-        model = lgb.LGBMClassifier(n_jobs=N_JOBS, random_state=RANDOM_STATE)
+        print(f"[{self.model_name}] Starting Randomized Search...")
 
-        random_search = RandomizedSearchCV(
-            model,
-            param_distributions=param_grid,
+        model_params = self.model.get_params()
+        if n_jobs != 1:
+            model_params["n_jobs"] = 1
+            
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
+
+        search = _search_on_train_val(
+            lgb.LGBMClassifier(**model_params),
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
             n_iter=n_iter,
-            **kwargs
+            n_jobs=n_jobs,
+            random_state=random_state,
+            search_type="random",
+            scoring=scoring,
+            **kwargs,
         )
 
-        # Tuning on validation to find best params quickly
-        random_search.fit(X_val_scaled, y_val)
+        self.model = search.best_estimator_
 
-        print(f"\nBest parameters: {random_search.best_params_}")
+        print(f"[{self.model_name}] Best params: {search.best_params_}")
+        print(f"[{self.model_name}] Best validation score: {search.best_score_:.4f}")
 
-        # Final training on the full training set
-        self.model = random_search.best_estimator_
-        self.model.fit(X_train_scaled, y_train)
-
-        return random_search
-
+        return search
+    
     def predict_proba(self, X):
         return self.model.predict_proba(X)
 
@@ -267,12 +350,9 @@ class LogisticRegressionModel(BaseModel):
     Inherits from BaseModel.
     """
     def __init__(self, model_name="LogisticRegression", n_jobs=N_JOBS, **kwargs):
-        lr_model = LogisticRegression(
-            n_jobs=n_jobs,
-            max_iter=1000,
-            random_state=RANDOM_STATE,
-            **kwargs
-        )
+        params = {"n_jobs": n_jobs, "max_iter": 1000, "random_state": RANDOM_STATE}
+        params.update(kwargs)
+        lr_model = LogisticRegression(**params)
         super().__init__(model_name=model_name, model=lr_model)
         self.scaler = RobustScaler()
 
@@ -289,6 +369,23 @@ class LogisticRegressionModel(BaseModel):
     def predict_proba(self, X):
         """Get probability scores."""
         return self.model.predict_proba(X)[:, 1]
+
+    def grid_search(self, df_train, df_val, param_grid, n_iter=None, n_jobs=N_JOBS, **kwargs):
+        print(f'[{self.model_name}] Grid Search...')
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
+        return _search_on_train_val(
+            self.model,
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
+            n_iter=n_iter,
+            n_jobs=n_jobs,
+            search_type="random" if n_iter else "grid",
+            **kwargs,
+        )
 
 
 class NaiveBayesModel(BaseModel):
@@ -315,6 +412,23 @@ class NaiveBayesModel(BaseModel):
         """Get probability scores."""
         return self.model.predict_proba(X)[:, 1]
 
+    def grid_search(self, df_train, df_val, param_grid, n_iter=None, n_jobs=N_JOBS, **kwargs):
+        print(f'[{self.model_name}] Grid Search...')
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
+        return _search_on_train_val(
+            self.model,
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
+            n_iter=n_iter,
+            n_jobs=n_jobs,
+            search_type="random" if n_iter else "grid",
+            **kwargs,
+        )
+
 
 class SVMModel(BaseModel):
     """
@@ -322,11 +436,9 @@ class SVMModel(BaseModel):
     Inherits from BaseModel.
     """
     def __init__(self, model_name="SVM", probability=True, **kwargs):
-        svm_model = SVC(
-            probability=probability,
-            random_state=RANDOM_STATE,
-            **kwargs
-        )
+        params = {"probability": probability, "random_state": RANDOM_STATE}
+        params.update(kwargs)
+        svm_model = SVC(**params)
         super().__init__(model_name=model_name, model=svm_model)
         self.scaler = RobustScaler()
 
@@ -344,6 +456,23 @@ class SVMModel(BaseModel):
         """Get probability scores."""
         return self.model.predict_proba(X)[:, 1]
 
+    def grid_search(self, df_train, df_val, param_grid, n_iter=None, n_jobs=N_JOBS, **kwargs):
+        print(f'[{self.model_name}] Grid Search...')
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
+        return _search_on_train_val(
+            self.model,
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
+            n_iter=n_iter,
+            n_jobs=n_jobs,
+            search_type="random" if n_iter else "grid",
+            **kwargs,
+        )
+
 
 class RandomForestModel(BaseModel):
     """
@@ -351,11 +480,9 @@ class RandomForestModel(BaseModel):
     Inherits from BaseModel.
     """
     def __init__(self, model_name="RandomForest", n_jobs=N_JOBS, **kwargs):
-        rf_model = RandomForestClassifier(
-            n_jobs=n_jobs,
-            random_state=RANDOM_STATE,
-            **kwargs
-        )
+        params = {"n_jobs": n_jobs, "random_state": RANDOM_STATE}
+        params.update(kwargs)
+        rf_model = RandomForestClassifier(**params)
         super().__init__(model_name=model_name, model=rf_model)
         self.scaler = None  # RF doesn't require scaling
 
@@ -390,3 +517,20 @@ class RandomForestModel(BaseModel):
     def predict_proba(self, X):
         """Get probability scores."""
         return self.model.predict_proba(X)[:, 1]
+
+    def grid_search(self, df_train, df_val, param_grid, n_iter=None, n_jobs=N_JOBS, **kwargs):
+        print(f'[{self.model_name}] Grid Search...')
+        y_train = df_train.is_seizure if 'is_seizure' in df_train.columns else df_train.iloc[:, -1]
+        y_val = df_val.is_seizure if 'is_seizure' in df_val.columns else df_val.iloc[:, -1]
+        return _search_on_train_val(
+            self.model,
+            df_train,
+            y_train,
+            df_val,
+            y_val,
+            param_grid,
+            n_iter=n_iter,
+            n_jobs=n_jobs,
+            search_type="random" if n_iter else "grid",
+            **kwargs,
+        )
