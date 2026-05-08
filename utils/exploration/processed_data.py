@@ -13,6 +13,7 @@ def plot_window(index_window, windows, channels, times, offset=5, sfreq=256, pat
     
     # select the specific window
     window_to_plot = windows[index_window]
+    calculated_offset = np.max(window_to_plot) - np.min(window_to_plot) # safe offset to avoid overlapping
     start_time = times[index_window]
     
     # calculate time vector for the X-axis (Window Start + (sample_index / SFREQ))
@@ -21,7 +22,7 @@ def plot_window(index_window, windows, channels, times, offset=5, sfreq=256, pat
 
     # plot each channel with a vertical offset to prevent overlapping
     for i, ch_name in enumerate(channels):
-        plt.plot(time_axis, window_to_plot[i] + (i * offset), label=ch_name, linewidth=0.8)
+        plt.plot(time_axis, window_to_plot[i] - (i * calculated_offset), label=ch_name, linewidth=0.8)
 
     plt.title(f"EEG Visualization: Window {index_window} (Starts at {start_time:.2f}s) - Patient {patient_name}")
     plt.xlabel("Time (Seconds from start of recording)")
