@@ -1,5 +1,6 @@
 import numpy as np
 from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import RandomOverSampler
 
 def balance_set(X, y, times, random_state=42):    
     """
@@ -7,7 +8,7 @@ def balance_set(X, y, times, random_state=42):
     """
     classes = np.unique(y)
     if len(classes) > 1:
-        rus = RandomUnderSampler(sampling_strategy="auto", random_state=random_state)
+        rus = RandomOverSampler(sampling_strategy="auto", random_state=random_state) ## MUST BE CHANGED TO UNDERSAMPLING
         idx = np.arange(len(y)).reshape(-1, 1)
         idx_rus, _ = rus.fit_resample(idx, y)
         
