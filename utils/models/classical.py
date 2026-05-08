@@ -147,12 +147,13 @@ class KNNModel(BaseModel):
         val_tuning_idx = downsample_indices(np.arange(len(df_val)), int(max_tuning_samples * 0.2))
 
         print(f"\nStarting tuning on {len(train_tuning_idx) + len(val_tuning_idx)} samples...")
+        kwargs.pop("model_name", None)
         grid_search = _search_on_train_val(
             self.model,
             df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
-            df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
+            df_train.iloc[train_tuning_idx]['is_seizure'] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx]['is_seizure'],
             df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
-            df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
+            df_val.iloc[val_tuning_idx]['is_seizure'] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx]['is_seizure'],
             param_grid,
             n_iter=n_iter,
             n_jobs=n_jobs,
