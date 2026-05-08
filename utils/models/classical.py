@@ -91,7 +91,7 @@ class KNNModel(BaseModel):
     Implementation of the KNN Baseline model using paper features.
     Inherits from BaseModel.
     """
-    def __init__(self, model_name="KNN", n_jobs=N_JOBS, **kwargs):
+    def __init__(self, model_name="KNN", n_jobs=N_JOBS, scaler=None, **kwargs):
         # Initialize the scikit-learn KNN model
         knn_internal = KNeighborsClassifier(
             n_jobs=n_jobs,
@@ -100,9 +100,9 @@ class KNNModel(BaseModel):
         super().__init__(model_name=model_name, model=knn_internal)
 
         # We need to keep track of the scaler to apply the same transformation in test
-        self.scaler = RobustScaler()
+        self.scaler = scaler
         
-    '''
+
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -116,7 +116,6 @@ class KNNModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-    '''
 
     def grid_search(
         self,
@@ -151,9 +150,9 @@ class KNNModel(BaseModel):
         grid_search = _search_on_train_val(
             self.model,
             df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
-            df_train.iloc[train_tuning_idx]['is_seizure'] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx]['is_seizure'],
+            df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
             df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
-            df_val.iloc[val_tuning_idx]['is_seizure'] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx]['is_seizure'],
+            df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
             param_grid,
             n_iter=n_iter,
             n_jobs=n_jobs,
@@ -187,7 +186,7 @@ class XGBModel(BaseModel):
         # We need to keep track of the scaler to apply the same transformation in test
         self.scaler = RobustScaler()
     
-    '''
+
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -201,7 +200,7 @@ class XGBModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-    '''
+
     
     def grid_search(
         self,
@@ -270,7 +269,7 @@ class LGBModel(BaseModel):
     Implementation of the LightGBM model for large-scale embedding classification.
     Optimized for high speed and parallelization.
     """
-    def __init__(self, model_name='LGBM', device=DEVICE, n_jobs=N_JOBS, random_state=RANDOM_STATE, **kwargs):
+    def __init__(self, model_name='LGBM', device=DEVICE, n_jobs=N_JOBS, random_state=RANDOM_STATE, scaler=None, **kwargs):
         if lgb is None:
             raise ImportError("LGBModel requires lightgbm. Install it or skip this model.")
         # Initialize LightGBM Classifier
@@ -282,10 +281,9 @@ class LGBModel(BaseModel):
             **kwargs
         )
         super().__init__(model_name=model_name, model=lgb_internal)
-        self.scaler = RobustScaler()
+        self.scaler = scaler
 
     
-    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -300,7 +298,6 @@ class LGBModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-    '''
 
     def grid_search(
         self,
@@ -356,14 +353,14 @@ class LogisticRegressionModel(BaseModel):
     Logistic Regression baseline model for EEG seizure detection.
     Inherits from BaseModel.
     """
-    def __init__(self, model_name="LogisticRegression", n_jobs=N_JOBS, **kwargs):
+    def __init__(self, model_name="LogisticRegression", n_jobs=N_JOBS, scaler=None, **kwargs):
         params = {"n_jobs": n_jobs, "max_iter": 1000, "random_state": RANDOM_STATE}
         params.update(kwargs)
         lr_model = LogisticRegression(**params)
         super().__init__(model_name=model_name, model=lr_model)
-        self.scaler = RobustScaler()
+        self.scaler = scaler
 
-    '''
+
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features with scaling."""
         return prepare_scaled_tabular_features(
@@ -373,7 +370,6 @@ class LogisticRegressionModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-    '''
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -402,12 +398,11 @@ class NaiveBayesModel(BaseModel):
     Gaussian Naive Bayes baseline model for EEG seizure detection.
     Inherits from BaseModel.
     """
-    def __init__(self, model_name="NaiveBayes", **kwargs):
+    def __init__(self, model_name="NaiveBayes", scaler=None, **kwargs):
         nb_model = GaussianNB(**kwargs)
         super().__init__(model_name=model_name, model=nb_model)
-        self.scaler = RobustScaler()
+        self.scaler = scaler
 
-    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features with scaling."""
         return prepare_scaled_tabular_features(
@@ -417,7 +412,7 @@ class NaiveBayesModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-    '''
+
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -446,12 +441,12 @@ class SVMModel(BaseModel):
     Support Vector Machine baseline model for EEG seizure detection.
     Inherits from BaseModel.
     """
-    def __init__(self, model_name="SVM", probability=True, **kwargs):
+    def __init__(self, model_name="SVM", probability=True, scaler=None, **kwargs):
         params = {"probability": probability, "random_state": RANDOM_STATE}
         params.update(kwargs)
         svm_model = SVC(**params)
         super().__init__(model_name=model_name, model=svm_model)
-        self.scaler = RobustScaler()
+        self.scaler = scaler
 
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features with scaling."""
@@ -490,14 +485,14 @@ class RandomForestModel(BaseModel):
     Random Forest baseline model for EEG seizure detection.
     Inherits from BaseModel.
     """
-    def __init__(self, model_name="RandomForest", n_jobs=N_JOBS, **kwargs):
+    def __init__(self, model_name="RandomForest", n_jobs=N_JOBS, scaler=None, **kwargs):
         params = {"n_jobs": n_jobs, "random_state": RANDOM_STATE}
         params.update(kwargs)
         rf_model = RandomForestClassifier(**params)
         super().__init__(model_name=model_name, model=rf_model)
-        self.scaler = None  # RF doesn't require scaling
+        self.scaler = scaler  # RF doesn't require scaling
 
-    '''
+
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features without scaling."""
         # Extract feature columns and labels
@@ -525,7 +520,6 @@ class RandomForestModel(BaseModel):
             print(pd.Series(y).value_counts(normalize=True))
 
         return X, y
-    '''
     
     def predict_proba(self, X):
         """Get probability scores."""
