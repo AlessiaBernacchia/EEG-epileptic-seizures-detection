@@ -20,3 +20,4 @@ dependencies:
     - pyedflib
     - wfdb
     - imblearn
+    - xgboost
