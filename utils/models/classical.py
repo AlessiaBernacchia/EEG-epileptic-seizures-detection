@@ -27,6 +27,7 @@ from .base import (
     RANDOM_STATE,
     _is_cuda_device,
     prepare_scaled_tabular_features,
+    select_features_correlation
 )
 
 
@@ -101,21 +102,36 @@ class KNNModel(BaseModel):
 
         # We need to keep track of the scaler to apply the same transformation in test
         self.scaler = scaler
+        self.features_selected = []
         
 
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
-        Prepares features by concatenating article and reference embeddings.
-        :param data: Dataframe containing 'embedding_article' and 'embedding_ref' columns.
-        :param is_training: If True, fits the scaler. If False, only transforms.
+        Preprocess data with scaling and feature selection dropping correlated features.
         """
-        return prepare_scaled_tabular_features(
+        X, y = prepare_scaled_tabular_features(
             data,
             self.scaler,
             is_training=is_training,
             verbose=verbose,
             model_name=self.model_name,
+            as_dataframe=True,
         )
+
+        X_selection, feats_selected = select_features_correlation(
+            X=X, y=y, 
+            is_training=is_training,
+            verbose=verbose,
+            stored_features=self.features_selected,
+            model_name=self.model_name,
+        )
+
+        # if selection performed update the attribute
+        if feats_selected is not None:
+            self.features_selected = feats_selected
+
+        return X_selection, y
+
 
     def grid_search(
         self,
@@ -360,17 +376,33 @@ class LogisticRegressionModel(BaseModel):
         lr_model = LogisticRegression(**params)
         super().__init__(model_name=model_name, model=lr_model)
         self.scaler = scaler
+        self.features_selected = []
 
 
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
-        """Prepares features with scaling."""
-        return prepare_scaled_tabular_features(
+        """Prepares features with scaling and feature selection dropping correlated features."""
+        X, y = prepare_scaled_tabular_features(
             data,
             self.scaler,
             is_training=is_training,
             verbose=verbose,
             model_name=self.model_name,
+            as_dataframe=True,
         )
+
+        X_selection, feats_selected = select_features_correlation(
+            X=X, y=y, 
+            is_training=is_training,
+            verbose=verbose,
+            stored_features=self.features_selected,
+            model_name=self.model_name,
+        )
+
+        # if selection performed update the attribute
+        if feats_selected is not None:
+            self.features_selected = feats_selected
+
+        return X_selection, y
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -403,17 +435,33 @@ class NaiveBayesModel(BaseModel):
         nb_model = GaussianNB(**kwargs)
         super().__init__(model_name=model_name, model=nb_model)
         self.scaler = scaler
+        self.features_selected = []
+
 
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
-        """Prepares features with scaling."""
-        return prepare_scaled_tabular_features(
+        """Prepares features with scaling and feature selection dropping correlated features."""
+        X, y = prepare_scaled_tabular_features(
             data,
             self.scaler,
             is_training=is_training,
             verbose=verbose,
             model_name=self.model_name,
+            as_dataframe=True,
         )
 
+        X_selection, feats_selected = select_features_correlation(
+            X=X, y=y, 
+            is_training=is_training,
+            verbose=verbose,
+            stored_features=self.features_selected,
+            model_name=self.model_name,
+        )
+
+        # if selection performed update the attribute
+        if feats_selected is not None:
+            self.features_selected = feats_selected
+
+        return X_selection, y
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -448,16 +496,33 @@ class SVMModel(BaseModel):
         svm_model = SVC(**params)
         super().__init__(model_name=model_name, model=svm_model)
         self.scaler = scaler
+        self.features_selected = []
+
 
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
-        """Prepares features with scaling."""
-        return prepare_scaled_tabular_features(
+        """Prepares features with scaling and feature selection dropping correlated features."""
+        X, y = prepare_scaled_tabular_features(
             data,
             self.scaler,
             is_training=is_training,
             verbose=verbose,
             model_name=self.model_name,
+            as_dataframe=True,
         )
+
+        X_selection, feats_selected = select_features_correlation(
+            X=X, y=y, 
+            is_training=is_training,
+            verbose=verbose,
+            stored_features=self.features_selected,
+            model_name=self.model_name,
+        )
+
+        # if selection performed update the attribute
+        if feats_selected is not None:
+            self.features_selected = feats_selected
+
+        return X_selection, y
 
     def predict_proba(self, X):
         """Get probability scores."""

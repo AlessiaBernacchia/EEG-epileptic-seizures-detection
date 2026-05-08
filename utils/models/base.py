@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import random
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,95 @@ def prepare_scaled_tabular_features(
         print(pd.Series(y).value_counts(normalize=True))
 
     return X_scaled, y
+
+def select_features_correlation(
+    X: pd.DataFrame, 
+    y: pd.Series = None, 
+    threshold: float = 0.95, 
+    is_training: bool = True, 
+    stored_features: list = None,
+    feature_names = None, # if passed a numpy array and want to convert to dataframe
+    as_dataframe = False, # if wanted a dataframe output
+    verbose: bool = True,
+    model_name: str = "model"
+):
+    """
+    Handles multicollinearity by removing highly correlated features.
+    If is_training is True, it identifies redundant features and saves the kept ones.
+    If False, it filters the input based on stored_features.
+    """
+    # convert X is not a dataframe
+    if isinstance(X, np.ndarray):
+        if feature_names is None:
+            raise ValueError("If X is a numpy array, feature_names must be provided.")
+        X = pd.DataFrame(X, columns=feature_names)
+        
+    if not is_training:
+        # not training: filter columns if stored_features is provided
+        if stored_features:
+            # select features that actually exist in the dataframe
+            cols_to_keep = [col for col in stored_features if col in X.columns]
+            if verbose:
+                print(f"[{model_name}] Applying pre-selected {len(cols_to_keep)} features.")
+            
+            X_selection = X[cols_to_keep]
+        else:
+            X_selection = X
+            
+        if not as_dataframe:
+            X_selection = X_selection.to_numpy()
+        return X_selection, None
+
+    # training: feature selection
+    if verbose:
+        print(f"[{model_name}] Analyzing multicollinearity (threshold={threshold})...")
+        
+    # absolute correlation matrix
+    corr_matrix = X.corr().abs()
+    # select upper triangle of correlation matrix (to avoid double counting pairs)
+    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    
+    # identify pairs exceeding threshold
+    to_drop = set()
+
+    # if y provided pre-calculate correlations with target
+    if y is not None:
+        target_corr = X.apply(lambda col: col.corr(y)).abs()
+    else:
+        target_corr = None
+
+    for column in upper.columns:
+        # find features highly correlated with current 'column'
+        high_corr_features = upper.index[upper[column] > threshold].tolist()
+        
+        for feature in high_corr_features:
+            if feature not in to_drop:
+                # high corr pair: (column, feature)
+                # if y provided select the one most corr with it
+                if target_corr is not None:
+                    # keep the one more correlated with the target
+                    if target_corr[column] > target_corr[feature]:
+                        to_drop.add(feature)
+                    else:
+                        to_drop.add(column)
+                else:
+                    # of no y just drop one of them
+                    f = random.choice([feature, column])
+                    to_drop.add(f)
+
+    # feature selction
+    selected_features = [col for col in X.columns if col not in to_drop]
+    
+    X_selection = X[selected_features]
+
+    if as_dataframe:
+        X_selection = pd.DataFrame(X_selection, columns=X.columns)
+    else:
+        X_selection = X_selection.to_numpy()
+    if verbose:
+        print(f"[{model_name}] Dropped {len(to_drop)} redundant features. Remaining: {len(selected_features)}")
+        
+    return X_selection, selected_features
 
 
 def evaluate_classifier_predictions(y_true, y_pred, display_labels=None, output_dict: bool = False):

@@ -9,7 +9,7 @@ try:
 except ImportError:
     HMM_AVAILABLE = False
 
-from .base import BaseModel, RANDOM_STATE, prepare_scaled_tabular_features
+from .base import BaseModel, RANDOM_STATE, prepare_scaled_tabular_features, select_features_correlation
 
 
 class HiddenMarkovModel(BaseModel):
@@ -38,15 +38,33 @@ class HiddenMarkovModel(BaseModel):
         # Create a dummy model for the interface
         super().__init__(model_name=model_name, model=None)
 
+        self.features_selected = []
+
+
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
-        """Prepares features with scaling."""
-        return prepare_scaled_tabular_features(
+        """Prepares features with scaling and feature selection dropping correlated features."""
+        X, y = prepare_scaled_tabular_features(
             data,
             self.scaler,
             is_training=is_training,
             verbose=verbose,
+            as_dataframe=True
             model_name=self.model_name,
         )
+
+        X_selection, feats_selected = select_features_correlation(
+            X=X, y=y, 
+            is_training=is_training,
+            verbose=verbose,
+            stored_features=self.features_selected,
+            model_name=self.model_name,
+        )
+
+        # if selection performed update the attribute
+        if feats_selected is not None:
+            self.features_selected = feats_selected
+
+        return X_selection, y
 
     def train(self, X_train, y_train, **kwargs):
         """
@@ -100,8 +118,3 @@ class HiddenMarkovModel(BaseModel):
     def predict(self, X):
         """Predict class labels."""
         return (self.predict_proba(X) >= 0.5).astype(int)
-
-
-# ============================================================================
-# DEEP LEARNING MODELS
-# ============================================================================
