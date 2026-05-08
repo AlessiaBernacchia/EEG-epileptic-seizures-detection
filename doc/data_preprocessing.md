@@ -108,7 +108,7 @@ The system generates two distinct datasets to support our dual research objectiv
 The goal of this task is to distinguish between active seizures (ictal) and normal brain activity (inter-ictal).
 
 * **Data Composition**: We preserve all available windows, specifically keeping the **ictal samples** as the target class (Label 1).
-* **Balancing**: Because seizures are rare, we apply **Random Undersampling** to the "Normal" class within the training and validation sets. This creates a 50/50 balance, preventing the model from becoming biased toward the majority "Normal" class.
+* **Balancing**: Because seizures are rare, we apply **Random Undersampling** to the "Normal" class within the training and validation sets. This creates, when a seizure is present, a 50/50 balance, preventing the model from becoming biased toward the majority "Normal" class.
 * **Target**: The model learns to identify the immediate electrical signature of a seizure.
 
 **Task 2: Seizure Forecasting**
@@ -119,6 +119,33 @@ The goal of this task is to predict the "Pre-Ictal" state, the window of time wh
 * **Label Reassignment**: We focus on the high-risk window defined as **1 to 10 minutes before onset**. Windows in this range are labeled as 1 (Pre-Ictal), while all other windows (farther than 10 minutes away) are labeled as 0.
 * **Forecasting Goal**: The model learns to trigger an alert several minutes before the seizure starts, providing a critical window for medical intervention.
 
+### Insights: the chb12 case study
+We explored the chb12 dataset by analyzing both individual files and the concatenated global training set. This audit provided a crucial understanding of our data distribution across the pipeline.
+
+**Pre-splitting**
+![Pre-Splitting Class Distribution](src/splitting/pre_splitting_class_distr.png)
+
+**Task1**
+<p align="center">
+  <img src="src/splitting/task1_train_class_distr.png" width="32%" />
+  <img src="src/splitting/task1_val_class_distr.png" width="32%" />
+  <img src="src/splitting/task1_test_class_distr.png" width="32%" />
+</p>
+
+**Task2**
+<p align="center">
+  <img src="src/splitting/task2_train_class_distr.png" width="32%" />
+  <img src="src/splitting/task2_val_class_distr.png" width="32%" />
+  <img src="src/splitting/task2_test_class_distr.png" width="32%" />
+</p>
+
+The diagnostic plots confirm that the class distribution remains imbalanced across all splits.
+
+This is a direct result of our processing pipeline, which performs splitting on a _per-file basis_. For segments with no seizures, the code maintains and splits all the data regardless of the label. Because many segments contain no target events, a strict balancing approach (undersampling the majority class globally) would lead to a significant loss of data, potentially starving the model of the temporal context needed for robust feature extraction. For instance, in subjects like chb12, the ratio of inter-ictal to ictal data can exceed 200:1.
+
+> We decided to maintain the current imbalanced distribution to ensure an adequate training set size and preserve background brain activity patterns. To mitigate the risk of majority-class bias, we will manage this imbalance at the architectural level using _weighted loss functions_, _prioritazing F1-score or Precision-Recall_ (not accuracy).
+
 ## Outputs and metadata
 
 Final datasets for each step are archived in compressed `.npz` format. Each file is self-contained, storing the split features ($X$), labels ($y$), and timestamps ($t$), alongside metadata such as `feature_names` and `channels` to ensure full traceability during the modeling phase.
+To use the data for the model we need import and aggregate the file based on `['X_train', 'X_val', 'X_test', 'y_train', 'y_val', 'y_test']` keys.
