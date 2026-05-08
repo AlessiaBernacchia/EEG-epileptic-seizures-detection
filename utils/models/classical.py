@@ -101,7 +101,8 @@ class KNNModel(BaseModel):
 
         # We need to keep track of the scaler to apply the same transformation in test
         self.scaler = RobustScaler()
-
+        
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -115,6 +116,7 @@ class KNNModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
+    '''
 
     def grid_search(
         self,
@@ -149,9 +151,9 @@ class KNNModel(BaseModel):
         grid_search = _search_on_train_val(
             self.model,
             df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
-            df_train.iloc[train_tuning_idx] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx],
+            df_train.iloc[train_tuning_idx]['is_seizure'] if hasattr(df_train, 'iloc') else df_train[train_tuning_idx]['is_seizure'],
             df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
-            df_val.iloc[val_tuning_idx] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx],
+            df_val.iloc[val_tuning_idx]['is_seizure'] if hasattr(df_val, 'iloc') else df_val[val_tuning_idx]['is_seizure'],
             param_grid,
             n_iter=n_iter,
             n_jobs=n_jobs,
@@ -184,7 +186,8 @@ class XGBModel(BaseModel):
 
         # We need to keep track of the scaler to apply the same transformation in test
         self.scaler = RobustScaler()
-
+    
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -198,7 +201,8 @@ class XGBModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
-
+    '''
+    
     def grid_search(
         self,
         df_train,
@@ -280,6 +284,8 @@ class LGBModel(BaseModel):
         super().__init__(model_name=model_name, model=lgb_internal)
         self.scaler = RobustScaler()
 
+    
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """
         Prepares features by concatenating article and reference embeddings.
@@ -294,6 +300,7 @@ class LGBModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
+    '''
 
     def grid_search(
         self,
@@ -356,6 +363,7 @@ class LogisticRegressionModel(BaseModel):
         super().__init__(model_name=model_name, model=lr_model)
         self.scaler = RobustScaler()
 
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features with scaling."""
         return prepare_scaled_tabular_features(
@@ -365,6 +373,7 @@ class LogisticRegressionModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
+    '''
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -398,6 +407,7 @@ class NaiveBayesModel(BaseModel):
         super().__init__(model_name=model_name, model=nb_model)
         self.scaler = RobustScaler()
 
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features with scaling."""
         return prepare_scaled_tabular_features(
@@ -407,6 +417,7 @@ class NaiveBayesModel(BaseModel):
             verbose=verbose,
             model_name=self.model_name,
         )
+    '''
 
     def predict_proba(self, X):
         """Get probability scores."""
@@ -486,6 +497,7 @@ class RandomForestModel(BaseModel):
         super().__init__(model_name=model_name, model=rf_model)
         self.scaler = None  # RF doesn't require scaling
 
+    '''
     def preprocess(self, data: pd.DataFrame, is_training: bool = True, verbose=True) -> tuple:
         """Prepares features without scaling."""
         # Extract feature columns and labels
@@ -513,7 +525,8 @@ class RandomForestModel(BaseModel):
             print(pd.Series(y).value_counts(normalize=True))
 
         return X, y
-
+    '''
+    
     def predict_proba(self, X):
         """Get probability scores."""
         return self.model.predict_proba(X)[:, 1]
