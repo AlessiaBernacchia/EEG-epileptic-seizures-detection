@@ -26,6 +26,7 @@ def split_and_balance(X, y, times, train_prop=0.7, val_prop=0.15, random_state=4
     Split the set in train, validation and test set, 
     while balancing the train and  validation set
     """
+    y = y.astype(int)
     
     n_windows = X.shape[0]
     
