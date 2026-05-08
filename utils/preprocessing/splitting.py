@@ -66,18 +66,18 @@ def split_and_balance(X, y, times, train_prop=0.7, val_prop=0.15, random_state=4
 
 
 
-def task2_preprocess(X, y_task1, y_task2, times):
+def task2_preprocess(X, y_task2, times, range_tts=(60, 600)):
     """
     Reassign labels to prepare it for task2
     """
     # Remove full in crisis
-    X_clean=X[y_task1==0]
-    tts_clean=y_task2[y_task1==0]
-    t_clean=times[y_task1==0]    
+    X_clean=X[y_task2 != 0]
+    tts_clean=y_task2[y_task2 != 0]
+    t_clean=times[y_task2 != 0]    
 
     y_pre = np.zeros(len(tts_clean))
-    # Pre-crisis from 1-10 minutes
-    y_pre[(tts_clean >= 60) & (tts_clean <=600)] = 1
+    # Pre-crisis from range tts selected (defaults 1-10 minutes)
+    y_pre[(tts_clean >= range_tts[0]) & (tts_clean <=range_tts[1])] = 1
     
     return X_clean, y_pre, t_clean
     
