@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -13,13 +12,16 @@ import matplotlib.pyplot as plt
 
 from .base import (
     BaseModel,
-    _TORCH_IMPORT_ERROR,
-    compute_binary_pos_weight,
     df_type_from_name,
     evaluate_classifier_predictions,
-    get_torch_device,
-    make_tensor_loader,
     slug,
+)
+from .deep_common import (
+    _TORCH_IMPORT_ERROR,
+    loader_kwargs,
+    plot_learning_curve,
+    pos_weight_tensor,
+    resolve_torch_device,
     torch,
 )
 
@@ -41,20 +43,6 @@ def _configure_cuda_runtime():
             torch.set_float32_matmul_precision("high")
         except AttributeError:
             pass
-
-
-def _cuda_loader_kwargs(device):
-    if getattr(device, "type", None) != "cuda":
-        return {}
-
-    cpu_count = os.cpu_count() or 1
-    num_workers = min(8, max(2, cpu_count // 2))
-    return {
-        "num_workers": num_workers,
-        "pin_memory": True,
-        "persistent_workers": True,
-        "prefetch_factor": 4,
-    }
 
 
 class GraphFeatureTransformer(nn.Module if nn is not None else object):
@@ -126,6 +114,10 @@ class SimpleTransformer(BaseModel):
         model_name: str = "SimpleTransformer_graph",
         device=None,
         feature_cols: Optional[List[str]] = None,
+        num_workers: int = 0,
+        pin_memory: bool = None,
+        persistent_workers: bool = False,
+        prefetch_factor: int = 2,
         **model_params,
     ):
         if torch is None or nn is None:
@@ -141,12 +133,16 @@ class SimpleTransformer(BaseModel):
             "dim_feedforward": model_params.get("dim_feedforward", 128),
             "dropout": model_params.get("dropout", 0.15),
         }
-        self.device = torch.device(device) if device is not None else get_torch_device()
+        self.device = resolve_torch_device(device)
         self.scaler = RobustScaler()
         self.feature_cols = feature_cols
         self.history: list[dict] = []
         self.threshold = 0.5
         self.last_metrics: dict = {}
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.persistent_workers = persistent_workers
+        self.prefetch_factor = prefetch_factor
 
         transformer = None
         if self.model_params["num_features"] is not None:
@@ -228,11 +224,17 @@ class SimpleTransformer(BaseModel):
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            **_cuda_loader_kwargs(self.device),
+            **loader_kwargs(
+                self.device,
+                num_workers=self.num_workers,
+                pin_memory=self.pin_memory,
+                persistent_workers=self.persistent_workers,
+                prefetch_factor=self.prefetch_factor,
+            ),
         )
 
     def _compute_pos_weight(self, y):
-        return compute_binary_pos_weight(torch, y, self.device)
+        return pos_weight_tensor(y, self.device)
 
     def train(
         self,
@@ -245,6 +247,7 @@ class SimpleTransformer(BaseModel):
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-4,
         patience: int = 2,
+        show_learning_curve: bool = True,
         **kwargs,
     ):
         """
@@ -290,9 +293,22 @@ class SimpleTransformer(BaseModel):
             row = {"epoch": epoch, "train_loss": float(total_loss / len(train_loader.dataset))}
 
             if X_val is not None and y_val is not None:
+                val_loader = self._make_loader(X_val, y_val, batch_size=batch_size, shuffle=False)
+                self.model.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for X_batch, y_batch in val_loader:
+                        X_batch = X_batch.to(self.device, non_blocking=True)
+                        y_batch = y_batch.to(self.device, non_blocking=True)
+                        with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                            logits = self.model(X_batch)
+                            loss = criterion(logits, y_batch)
+                        val_loss += loss.item() * X_batch.size(0)
+
                 val_prob = self.predict_proba(X_val, batch_size=batch_size)
                 val_pred = (val_prob >= self.threshold).astype(int)
                 val_f1 = f1_score(np.asarray(y_val).astype(int), val_pred, average="weighted")
+                row["val_loss"] = float(val_loss / len(val_loader.dataset))
                 row["val_f1_weighted"] = float(val_f1)
 
                 if val_f1 > best_val_f1:
@@ -311,6 +327,16 @@ class SimpleTransformer(BaseModel):
 
         if best_state is not None:
             self.model.load_state_dict(best_state)
+        if show_learning_curve:
+            self.plot_learning_curve()
+
+    def plot_learning_curve(self, ax=None, show=True):
+        return plot_learning_curve(
+            self.history,
+            title=f"{self.model_name} learning curve",
+            ax=ax,
+            show=show,
+        )
 
     def predict_proba(self, X, batch_size: int = 512):
         """

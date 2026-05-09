@@ -16,6 +16,10 @@ dependencies:
   - ipykernel
   - requests
   - tqdm
+  - pytorch-cuda
+  - pytorch
+  - torchaudio
+  - torchvision
   - pip
   - pip:
     - pyedflib

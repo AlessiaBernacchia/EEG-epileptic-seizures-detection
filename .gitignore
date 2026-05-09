@@ -421,3 +421,6 @@ FodyWeavers.xsd
 data/
 eeg_seizure_detection.egg-info/
 build/
+saved_models/
+.agents
+.codex
