@@ -1,9 +1,48 @@
+import os
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
-from .base import BaseModel, _TORCH_IMPORT_ERROR, get_torch_device, torch
+from .base import BaseModel
+
+try:
+    import torch
+except ImportError:
+    _TORCH_IMPORT_ERROR = True
+    raise OSError(f"PyTorch is required for deep learning models: {_TORCH_IMPORT_ERROR}")
+
+def get_torch_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+
+def _configure_cuda_runtime():
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        try:
+            torch.set_float32_matmul_precision("high")
+        except AttributeError:
+            pass
+
+
+def _cuda_loader_kwargs(device, batch_size):
+    if getattr(device, "type", None) != "cuda":
+        return {}
+
+    cpu_count = os.cpu_count() or 1
+    num_workers = min(8, max(2, cpu_count // 2))
+    return {
+        "num_workers": num_workers,
+        "pin_memory": True,
+        "persistent_workers": True,
+        "prefetch_factor": 4,
+    }
 
 try:
     import torch.nn as nn
@@ -27,7 +66,7 @@ class ConvNet1D(nn.Module if nn is not None else object):
         num_filters: int = 32,
         kernel_sizes: list[int] = None,
         dropout_rate: float = 0.3,
-        num_classes: int = 2,
+        num_classes: int = 1,
     ):
         if nn is None:
             raise OSError(f"PyTorch is required for ConvNet1D: {_TORCH_IMPORT_ERROR}")
@@ -72,6 +111,7 @@ class ConvNet1D(nn.Module if nn is not None else object):
         x = torch.cat(pooled, dim=1)
         # Fully connected layers
         return self.fc_layers(x)
+    
 class ConvNetModel(BaseModel):
     """
     CNN model wrapper for 1D EEG time-series data.
@@ -88,6 +128,8 @@ class ConvNetModel(BaseModel):
     ):
         if torch is None or nn is None:
             raise OSError(f"PyTorch is required for ConvNetModel: {_TORCH_IMPORT_ERROR}")
+
+        _configure_cuda_runtime()
         
         self.device = torch.device(device) if device is not None else get_torch_device()
         self.input_channels = input_channels
@@ -119,11 +161,11 @@ class ConvNetModel(BaseModel):
                 if col in feature_cols:
                     feature_cols.remove(col)
         
-        X = data[feature_cols].fillna(0).to_numpy().astype(np.float32)
+        X = data[feature_cols].select_dtypes(include=[np.number, "bool"]).copy()
         
         # Normalize to [0, 1]
-        X_min = X.min(axis=0, keepdims=True)
-        X_max = X.max(axis=0, keepdims=True)
+        X_min = X.min(axis=0)
+        X_max = X.max(axis=0)
         X = (X - X_min) / (X_max - X_min + 1e-8)
         
         # Get labels
@@ -141,93 +183,103 @@ class ConvNetModel(BaseModel):
         
         return X.astype(np.float32), y
 
-    def _make_loader(self, X, y=None, batch_size: int = 32, shuffle: bool = False):
+    def _make_loader(self, X, y=None, batch_size: int = 128, shuffle: bool = False):
         # Reshape for CNN: (n_samples, n_features) -> (n_samples, 1, n_features)
-        X_reshaped = torch.from_numpy(X).unsqueeze(1)  # Add channel dimension
+        X_reshaped = torch.from_numpy(X).unsqueeze(1)
         if y is not None:
             y_tensor = torch.from_numpy(y.astype(np.float32))
             dataset = TensorDataset(X_reshaped, y_tensor)
         else:
             dataset = TensorDataset(X_reshaped)
-        
+
         return DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            pin_memory=self.device.type == "cuda"
+            **_cuda_loader_kwargs(self.device, batch_size),
         )
 
     def train(self, X_train, y_train, X_val=None, y_val=None, epochs: int = 10,
-              batch_size: int = 32, learning_rate: float = 1e-3, patience: int = 3, **kwargs):
+              batch_size: int = 128, learning_rate: float = 1e-3, patience: int = 3, **kwargs):
         """Train the CNN model."""
         print(f"[{self.model_name}] Starting training...")
-        
+
         train_loader = self._make_loader(X_train, y_train, batch_size=batch_size, shuffle=True)
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        
+        scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == "cuda")
+
         best_val_f1 = -np.inf
         best_state = None
         epochs_without_improvement = 0
         self.history = []
-        
+
         for epoch in range(1, epochs + 1):
             self.model.train()
             total_loss = 0.0
-            
+
             for X_batch, y_batch in tqdm(train_loader, desc=f"epoch {epoch} train", leave=False):
                 X_batch = X_batch.to(self.device, non_blocking=True)
                 y_batch = y_batch.to(self.device, non_blocking=True)
-                
-                optimizer.zero_grad()
-                logits = self.model(X_batch)
-                loss = criterion(logits.squeeze(), y_batch)
-                loss.backward()
-                optimizer.step()
-                
+
+                optimizer.zero_grad(set_to_none=True)
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
+                    loss = criterion(logits.squeeze(), y_batch)
+
+                if scaler.is_enabled():
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
+
                 total_loss += loss.item() * X_batch.size(0)
-            
+
             row = {"epoch": epoch, "train_loss": float(total_loss / len(train_loader.dataset))}
-            
+
             if X_val is not None and y_val is not None:
                 val_pred = (self.predict_proba(X_val, batch_size=batch_size) >= self.threshold).astype(int)
                 val_f1 = f1_score(y_val.astype(int), val_pred, average="weighted")
                 row["val_f1"] = float(val_f1)
-                
+
                 if val_f1 > best_val_f1:
                     best_val_f1 = val_f1
                     best_state = {key: value.detach().cpu().clone() for key, value in self.model.state_dict().items()}
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
-            
+
             self.history.append(row)
             print(row)
-            
+
             if X_val is not None and y_val is not None and epochs_without_improvement >= patience:
                 print(f"Early stopping at epoch {epoch}")
                 break
-        
+
         if best_state is not None:
             self.model.load_state_dict(best_state)
 
-    def predict_proba(self, X, batch_size: int = 32):
+    def predict_proba(self, X, batch_size: int = 128):
         """Return probability scores."""
         self.model.eval()
         loader = self._make_loader(X, batch_size=batch_size, shuffle=False)
         probabilities = []
-        
+
         with torch.no_grad():
             for (X_batch,) in tqdm(loader, desc="predict", leave=False):
                 X_batch = X_batch.to(self.device, non_blocking=True)
-                logits = self.model(X_batch)
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
                 probabilities.append(torch.sigmoid(logits).cpu().numpy())
-        
+
         return np.concatenate(probabilities).squeeze()
 
-    def predict(self, X, batch_size: int = 32):
+    def predict(self, X, batch_size: int = 128):
         """Predict class labels."""
         return (self.predict_proba(X, batch_size=batch_size) >= self.threshold).astype(int)
+    
 class RecurrentNet(nn.Module if nn is not None else object):
     """
     Recurrent Neural Network (LSTM) for time-series EEG data.
@@ -240,7 +292,7 @@ class RecurrentNet(nn.Module if nn is not None else object):
         num_layers: int = 2,
         dropout: float = 0.3,
         bidirectional: bool = True,
-        num_classes: int = 2,
+        num_classes: int = 1,
     ):
         if nn is None:
             raise OSError(f"PyTorch is required for RecurrentNet: {_TORCH_IMPORT_ERROR}")
@@ -284,6 +336,8 @@ class RecurrentNet(nn.Module if nn is not None else object):
         last_out = lstm_out[:, -1, :]
         # Fully connected
         return self.fc_layers(last_out)
+    
+    
 class RecurrentNetModel(BaseModel):
     """
     LSTM model wrapper for time-series EEG data.
@@ -301,6 +355,8 @@ class RecurrentNetModel(BaseModel):
     ):
         if torch is None or nn is None:
             raise OSError(f"PyTorch is required for RecurrentNetModel: {_TORCH_IMPORT_ERROR}")
+
+        _configure_cuda_runtime()
         
         self.device = torch.device(device) if device is not None else get_torch_device()
         self.hidden_size = hidden_size
@@ -345,11 +401,11 @@ class RecurrentNetModel(BaseModel):
                 if col in feature_cols:
                     feature_cols.remove(col)
         
-        X = data[feature_cols].fillna(0).to_numpy().astype(np.float32)
+        X = data[feature_cols].select_dtypes(include=[np.number, "bool"]).copy()
         
         # Normalize to [0, 1]
-        X_min = X.min(axis=0, keepdims=True)
-        X_max = X.max(axis=0, keepdims=True)
+        X_min = X.min(axis=0)
+        X_max = X.max(axis=0)
         X = (X - X_min) / (X_max - X_min + 1e-8)
         
         # Get labels
@@ -367,7 +423,7 @@ class RecurrentNetModel(BaseModel):
         
         return X.astype(np.float32), y
 
-    def _make_loader(self, X, y=None, batch_size: int = 32, shuffle: bool = False):
+    def _make_loader(self, X, y=None, batch_size: int = 128, shuffle: bool = False):
         # Reshape for RNN: (n_samples, n_features) -> (n_samples, 1, n_features)
         # where 1 is the sequence length
         X_reshaped = torch.from_numpy(X).unsqueeze(1)  # Add sequence dimension
@@ -382,11 +438,11 @@ class RecurrentNetModel(BaseModel):
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            pin_memory=self.device.type == "cuda"
+            **_cuda_loader_kwargs(self.device, batch_size),
         )
 
     def train(self, X_train, y_train, X_val=None, y_val=None, epochs: int = 10,
-              batch_size: int = 32, learning_rate: float = 1e-3, patience: int = 3, **kwargs):
+              batch_size: int = 128, learning_rate: float = 1e-3, patience: int = 3, **kwargs):
         """Train the LSTM model."""
         if self.model is None:
             self._init_model(X_train.shape[1])
@@ -396,6 +452,7 @@ class RecurrentNetModel(BaseModel):
         train_loader = self._make_loader(X_train, y_train, batch_size=batch_size, shuffle=True)
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == "cuda")
         
         best_val_f1 = -np.inf
         best_state = None
@@ -410,11 +467,18 @@ class RecurrentNetModel(BaseModel):
                 X_batch = X_batch.to(self.device, non_blocking=True)
                 y_batch = y_batch.to(self.device, non_blocking=True)
                 
-                optimizer.zero_grad()
-                logits = self.model(X_batch)
-                loss = criterion(logits.squeeze(), y_batch)
-                loss.backward()
-                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
+                    loss = criterion(logits.squeeze(), y_batch)
+
+                if scaler.is_enabled():
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
                 
                 total_loss += loss.item() * X_batch.size(0)
             
@@ -442,7 +506,7 @@ class RecurrentNetModel(BaseModel):
         if best_state is not None:
             self.model.load_state_dict(best_state)
 
-    def predict_proba(self, X, batch_size: int = 32):
+    def predict_proba(self, X, batch_size: int = 128):
         """Return probability scores."""
         if self.model is None:
             raise ValueError("LSTM model not initialized. Call train() first.")
@@ -454,11 +518,12 @@ class RecurrentNetModel(BaseModel):
         with torch.no_grad():
             for (X_batch,) in tqdm(loader, desc="predict", leave=False):
                 X_batch = X_batch.to(self.device, non_blocking=True)
-                logits = self.model(X_batch)
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
                 probabilities.append(torch.sigmoid(logits).cpu().numpy())
         
         return np.concatenate(probabilities).squeeze()
 
-    def predict(self, X, batch_size: int = 32):
+    def predict(self, X, batch_size: int = 128):
         """Predict class labels."""
         return (self.predict_proba(X, batch_size=batch_size) >= self.threshold).astype(int)

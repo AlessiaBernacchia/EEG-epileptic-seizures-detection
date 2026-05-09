@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -31,6 +32,29 @@ except (ImportError, OSError):
     TensorDataset = None
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _configure_cuda_runtime():
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        try:
+            torch.set_float32_matmul_precision("high")
+        except AttributeError:
+            pass
+
+
+def _cuda_loader_kwargs(device):
+    if getattr(device, "type", None) != "cuda":
+        return {}
+
+    cpu_count = os.cpu_count() or 1
+    num_workers = min(8, max(2, cpu_count // 2))
+    return {
+        "num_workers": num_workers,
+        "pin_memory": True,
+        "persistent_workers": True,
+        "prefetch_factor": 4,
+    }
 
 
 class GraphFeatureTransformer(nn.Module if nn is not None else object):
@@ -106,6 +130,8 @@ class SimpleTransformer(BaseModel):
     ):
         if torch is None or nn is None:
             raise OSError(f"PyTorch is required for SimpleTransformer: {_TORCH_IMPORT_ERROR}")
+
+        _configure_cuda_runtime()
 
         self.model_params = {
             "num_features": model_params.get("num_features"),
@@ -191,15 +217,18 @@ class SimpleTransformer(BaseModel):
         return X_scaled.astype(np.float32), y
 
     def _make_loader(self, X, y=None, batch_size: int = 512, shuffle: bool = False):
-        return make_tensor_loader(
-            torch,
-            TensorDataset,
-            DataLoader,
-            X,
-            y,
+        X_tensor = torch.from_numpy(np.asarray(X, dtype=np.float32))
+        if y is not None:
+            y_tensor = torch.from_numpy(np.asarray(y, dtype=np.float32))
+            dataset = TensorDataset(X_tensor, y_tensor)
+        else:
+            dataset = TensorDataset(X_tensor)
+
+        return DataLoader(
+            dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            pin_memory=self.device.type == "cuda",
+            **_cuda_loader_kwargs(self.device),
         )
 
     def _compute_pos_weight(self, y):
@@ -228,6 +257,7 @@ class SimpleTransformer(BaseModel):
         train_loader = self._make_loader(X_train, y_train, batch_size=batch_size, shuffle=True)
         criterion = nn.BCEWithLogitsLoss(pos_weight=self._compute_pos_weight(y_train))
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == "cuda")
 
         best_val_f1 = -np.inf
         best_state = None
@@ -243,10 +273,17 @@ class SimpleTransformer(BaseModel):
                 y_batch = y_batch.to(self.device, non_blocking=True)
 
                 optimizer.zero_grad(set_to_none=True)
-                logits = self.model(X_batch)
-                loss = criterion(logits, y_batch)
-                loss.backward()
-                optimizer.step()
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
+                    loss = criterion(logits, y_batch)
+
+                if scaler.is_enabled():
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
 
                 total_loss += loss.item() * X_batch.size(0)
 
@@ -288,7 +325,8 @@ class SimpleTransformer(BaseModel):
         with torch.no_grad():
             for (X_batch,) in tqdm(loader, desc="predict", leave=False):
                 X_batch = X_batch.to(self.device, non_blocking=True)
-                logits = self.model(X_batch)
+                with torch.autocast(device_type="cuda", enabled=self.device.type == "cuda"):
+                    logits = self.model(X_batch)
                 probabilities.append(torch.sigmoid(logits).cpu().numpy())
         return np.concatenate(probabilities)
 

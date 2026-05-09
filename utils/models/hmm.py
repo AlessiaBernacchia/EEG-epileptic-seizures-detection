@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import RobustScaler
-
 try:
     from hmmlearn import hmm
     HMM_AVAILABLE = True
@@ -23,6 +21,7 @@ class HiddenMarkovModel(BaseModel):
         n_components=3,
         covariance_type="full",
         n_iter=100,
+        scaler=None,
         **kwargs
     ):
         if not HMM_AVAILABLE:
@@ -33,7 +32,7 @@ class HiddenMarkovModel(BaseModel):
         self.n_iter = n_iter
         self.hmm_seizure = None
         self.hmm_normal = None
-        self.scaler = RobustScaler()
+        self.scaler = scaler
         
         # Create a dummy model for the interface
         super().__init__(model_name=model_name, model=None)
@@ -48,7 +47,7 @@ class HiddenMarkovModel(BaseModel):
             self.scaler,
             is_training=is_training,
             verbose=verbose,
-            as_dataframe=True
+            as_dataframe=True,
             model_name=self.model_name,
         )
 
