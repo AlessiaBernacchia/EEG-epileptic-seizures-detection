@@ -56,6 +56,14 @@ def save_model(
 
 
 def load_model(path: Union[str, Path], map_location: str = "cpu") -> Any:
+    """
+    Load a trained model object from the Models directory.
+
+    The full wrapper object is loaded, so model-specific attributes such as
+    scalers, selected features, thresholds, histories, and fitted estimators are
+    kept together without changing the existing model classes.
+    """
+    
     path = Path(path)
 
     if path.suffix == ".joblib":
