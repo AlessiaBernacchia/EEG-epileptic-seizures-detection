@@ -16,14 +16,13 @@ dependencies:
   - ipykernel
   - requests
   - tqdm
-  - pytorch-cuda
+  - xgboost
+  - dask
+  - lightgbm
   - pytorch
-  - torchaudio
   - torchvision
+  - torchaudio
   - pip
   - pip:
-    - pyedflib
-    - wfdb
-    - xgboost
-    - dask
-    - lightgbm
+      - pyedflib
+      - wfdb

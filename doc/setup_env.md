@@ -9,14 +9,20 @@ To set up the environment and prepare the data for analysis, follow these steps:
     cd EEG-epileptic-seizures-detection
     ```
 3. **Install environment with required dependencies**:
+   If nvidia GPU is available:
    ```bash
-    conda env create --file environment.yml
+    conda env create --file environment-gpu.yml
    ```
+   else:
+   ```bash
+    conda env create --file environment-cpu.yml
+   ```
+
 4. **Activate the environment**:
    ```bash
      conda activate eeg-seizure-detection
    ```
-> To update the environment with new dependencies, simply add them to the `environment.yml` file and run `conda env update -n eeg-seizure-detection --file ./environment.yml --prune` to apply the changes.
+> To update the environment with new dependencies, simply add them to the `environment.yml` file and run `conda env update -n eeg-seizure-detection --file ./environment-cpu.yml --prune` or `conda env update -n eeg-seizure-detection --file ./environment-cpu.yml --prune` to apply the changes.
 
 5. **Make kernel available in Jupyter**:
     ```bash
