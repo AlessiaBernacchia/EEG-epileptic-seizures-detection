@@ -54,3 +54,35 @@ def save_model(
 
     return file_path
 
+
+def load_model(path: Union[str, Path], map_location: str = "cpu") -> Any:
+    path = Path(path)
+
+    if path.suffix == ".joblib":
+        import torch
+
+        original_torch_load = torch.load
+
+        def torch_load_with_map_location(*args, **kwargs):
+            kwargs.setdefault("map_location", torch.device(map_location))
+            return original_torch_load(*args, **kwargs)
+
+        torch.load = torch_load_with_map_location
+
+        try:
+            import joblib
+            model = joblib.load(path)
+        finally:
+            torch.load = original_torch_load
+
+    else:
+        with path.open("rb") as f:
+            model = pickle.load(f)
+
+    if hasattr(model, "model") and hasattr(model.model, "to"):
+        model.model.to(map_location)
+
+    if hasattr(model, "device"):
+        model.device = torch.device(map_location)
+
+    return model
