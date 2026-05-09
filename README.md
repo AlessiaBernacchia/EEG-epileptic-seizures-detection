@@ -1,6 +1,23 @@
 # EEG-epileptic-seizures-detection
 The goal of this project is to develop methods to detect epileptic seizures from electroencephalographic (EEG) signals. The project involves analyzing brain activity recordings to distinguish between normal and status epilepticus and exploring how temporal patterns in EEG signals can be used for reliable and interpretable classification.
 
+## Authors & Contributions
+- [Bernacchia Alessia](https://github.com/AlessiaBernacchia)
+    - data collection
+    - preprocessing (cleaning, feature extraction and labelling)
+    - cross-subjects comparison
+    - report
+
+- [Pioda Tommaso](https://github.com/Thetommigun432)
+    - preprocessing (labelling)
+    - modelling (baseline models and deep learning models)
+    - report
+
+- [Villani Giacomo](https://github.com/DownToTheGround)
+    - preprocessing (splitting)
+    - interpretability
+    - report
+
 ## Dataset
 The dataset used in this project is the "Epileptic Seizure Recognition" dataset, which contains EEG recordings from 23 patients (and ocassionally other signals that we will exclude from analysis). Each recording is labeled as either normal or status epilepticus, providing a basis for training and evaluating classification models.
 
