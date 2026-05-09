@@ -1,4 +1,9 @@
 # Model Implementation Guide
+[Notebook for task 1 (baseline models)](../notebooks/models_task01/baseline_models.ipynb)
+
+[Notebook for task 2 (baseline models)](../notebooks/models_task02/baseline_models.ipynb)
+
+[Notebook for task 2 (deep learning models)](../notebooks/models_task02/deep_models.ipynb)
 
 ## Overview
 
