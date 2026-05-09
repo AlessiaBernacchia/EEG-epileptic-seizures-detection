@@ -37,6 +37,25 @@ The project will be organized into a clear and modular pipeline, with separate s
 4. [**Cross-subjects generalization Evaluation**](doc/cross_subjects_eval.md)
 ...
 
+## Conclusions
+
+The project demonstrated that while detecting an active seizure (**Task 1**) is a relatively stable task for classical machine learning models like KNN, forecasting a seizure before it happens (**Task 2**) remains a complex challenge due to high inter-patient variability.
+
+Key findings include:
+
+* **Baseline Efficiency**: For detection tasks, hyperparameter-tuned classical models (KNN) achieved near-perfect accuracy on stable background activity, making deep learning unnecessary for simple binary classification of ictal vs. inter-ictal states.
+* **The "Stability Detection" Paradox**: Models in Task 2 achieved high **Weighted Precision (~0.90)**, proving they are highly reliable at recognizing normal brain activity. However, the low precision in the seizure-specific class highlights the difficulty of distinguishing the subtle 10-minute **pre-ictal** window from standard background noise.
+* **Biological Generalization**: Evaluation across subjects revealed that models are highly sensitive to **age and gender**. A model trained on a toddler (chb12) failed to generalize to an adult male (chb04), confirming that brain maturation significantly alters the morphological signature of seizures.
+* **Forecasting Sensitivity**: Forecasting (Task 2) proved much more subject-dependent than Detection (Task 1). Even within the same demographic (pediatric), the model struggled to generalize between similar subjects, suggesting that pre-ictal signatures may be unique to an individual's specific neural circuitry.
+
+## Next Steps
+
+* **Subject-Specific Calibration**: Implement a "transfer learning" or fine-tuning approach where a general model is calibrated using a small amount of data from a new patient to improve individual forecasting accuracy.
+* **False Positive Reduction**: Integrate a "smoothing" or "persistence" logic (e.g., the model must predict a pre-ictal state for $X$ consecutive windows) to reduce the number of isolated false alarms that cause patient stress.
+* **Feature Engineering Expansion**: Explore non-linear features such as **Entropy** or **Phase-Amplitude Coupling**, which may capture the "build-up" to a seizure better than standard power spectral density.
+* **Hardware Integration Analysis**: Assess the computational feasibility of deploying these models on edge devices (like wearables) by optimizing the feature extraction step, which is currently the most resource-intensive part of the pipeline.
+* **Multi-Subject Training**: Expand the training set from a single subject to a multi-subject pool (clustered by age and gender) to attempt the creation of a more robust "universal" baseline model.
+
 ## Folder structure:
 ```
 EEG-epileptic-seizures-detection/
@@ -44,22 +63,54 @@ EEG-epileptic-seizures-detection/
 │   ├── raw/                    # Original, immutable data
 │   │   ├── info/               # Meta-data: SUBJECT-INFO and chbxx-summary.txt files
 │   │   └── records/            # selected large .edf brain signal files
-│   └── processed/
-│       ├── ...
-
+│   ├── preprocessed/           # preprocessed files for each subject
+│   │   ├── chb04   
+│   │   ├── ...
+│   │   ...
+│   ├── features/               # features extracted for each subject
+│   │   ├── chb04   
+│   │   ├── ...
+│   │   ...
+│   ├── labels/                 # features extracted for each subject for each task
+│   │   ├── chb04   
+│   │   ├── ...
+│   │   ...
+│   └── splitting/              # final splitting data
+│       ├── task_1/             # data splitted for task 01 for each subject
+│       └── task_2/             # data splitted for task 02 for each subject
+│
 ├── doc/                        # Project documentation and visualizations
-│   └── src/                    # Exported plots (png) and markdown guides (md)
-│        ├── exploration/       
-│        ├── preprocessing/
-│              ....
+│   ├── src/                    # Exported plots (png) and markdown guides (md)
+│   │    ├── exploration/       
+│   │    ├── preprocessing/
+│   │          ....
+│   └── ...                     # all documentation and tutorial markdown files
+│ 
 ├── notebooks/                  # Experimental Jupyter notebooks
-│   └── collection/             # Notebooks for testing data gathering logic
+│   ├── collection/             # Notebooks for testing data gathering logic
+│   ├── preprocessing/          # Notebooks for preprocess data (cleaning, feature extraction, labelling, splitting)   
+│   ├── models_task01/          # Notebooks to create, select and compare models for task 1
+│   └── models_task02/          # Notebooks to create, select and compare models for task 2             
+│
 ├── utils/                      # Core Python package (the logic "engine")
-│   ├── collection/             # Modules for downloading and parsing (collect.py)
-│   ├── exploration/            # Modules for EDA and visualization (raw_data.py)
+│   ├── collection/             # Modules for downloading and parsing
+│   ├── exploration/            # Modules for EDA and visualization (both raw data and preprocessed)
+│   ├── models/                 # Modules for Models implementation
+│   ├── comparison/             # Modules for Models comparison across subjects
 │   └── __init__.py             # Makes 'utils' an importable package
+│
+│   
+├── saved_models/               # Project saved models (best models for each task)
+│   ├── task_1/                 # Exported best models pretrained and hypertuned
+│   │    ├── chb<n>_<model-name>_best_model.jonlib
+│   │          ....
+│   └── task_2/  
+│        ├── chb<n>_<model-name>_best_model.jonlib
+│            ....
+│   
 ├── .gitignore                  # Instructions on which files Git should ignore (e.g., data/)
-├── environment.yml             # Conda environment specification (Python 3.9 + dependencies)
+├── environment-cpu.yml         # Conda environment specification for cpu dependencies
+├── environment-gpu.yml         # Conda environment specification for gpu dependencies
 ├── pyproject.toml              # Modern build system configuration
 ├── README.md                   # Main project documentation
 └── setup.py                    # Legacy build script for "editable" mode installation
