@@ -22,6 +22,8 @@ dependencies:
   - pytorch
   - torchvision
   - torchaudio
+  - shap
+  - lime
   - pip
   - pip:
       - pyedflib
