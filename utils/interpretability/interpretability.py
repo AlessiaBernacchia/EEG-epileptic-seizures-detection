@@ -24,18 +24,22 @@ def shap_tree_explainer(X_test, model):
         model (TreeModel): Tree model trained over the data
         
         
-    Plot a summary and a bar plot over the test set    
+    Plot a summary and a bar plot over a sample of 100 on the test set    
     """
 
+    if len(X_test) > 100:
+        X_sample = X_test.sample(100, random_state=42)
+    else:
+        X_sample = X_test
     
     explainer = shap.TreeExplainer(model)
-    shap_val = explainer.shap_values(X_test)
+    shap_val = explainer.shap_values(X_sample)
 
     # summary plot
-    shap.summary_plot(shap_val, X_test)
+    shap.summary_plot(shap_val, X_sample)
 
     # bar plot
-    shap.summary_plot(shap_val, X_test, plot_type="bar")
+    shap.summary_plot(shap_val, X_sample, plot_type="bar")
     
 
 def shap_linear_explainer(X_test, model):

@@ -72,6 +72,7 @@ Key findings include:
 * **Feature Engineering Expansion**: Explore non-linear features such as **Entropy** or **Phase-Amplitude Coupling**, which may capture the "build-up" to a seizure better than standard power spectral density.
 * **Hardware Integration Analysis**: Assess the computational feasibility of deploying these models on edge devices (like wearables) by optimizing the feature extraction step, which is currently the most resource-intensive part of the pipeline.
 * **Multi-Subject Training**: Expand the training set from a single subject to a multi-subject pool (clustered by age and gender) to attempt the creation of a more robust "universal" baseline model.
+* **Conclude Interpretability**: Due to the project deadline, the interpretability analysis remained incomplete. A primary next step would be to fully implement and analyze the SHAP and LIME frameworks to "open the black box" of our best-performing models.
 
 ## Folder structure:
 ```
