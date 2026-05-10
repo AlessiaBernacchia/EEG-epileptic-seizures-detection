@@ -52,7 +52,7 @@ The project will be organized into a clear and modular pipeline, with separate s
 2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
 3. [**Run Models & Implementation Info**](doc/models_implementation.md)
 4. [**Cross-subjects generalization Evaluation**](doc/cross_subjects_eval.md)
-...
+5. [**Interpretability**](doc/interpretability.md)
 
 ## Conclusions
 
@@ -106,14 +106,17 @@ EEG-epileptic-seizures-detection/
 ├── notebooks/                  # Experimental Jupyter notebooks
 │   ├── collection/             # Notebooks for testing data gathering logic
 │   ├── preprocessing/          # Notebooks for preprocess data (cleaning, feature extraction, labelling, splitting)   
-│   ├── models_task01/          # Notebooks to create, select and compare models for task 1
-│   └── models_task02/          # Notebooks to create, select and compare models for task 2             
+│   ├── models_task01/          # Notebooks to create, select, compare and interpret models for task 1
+│   └── models_task02/          # Notebooks to create, select, compare and interpret models for task 2             
 │
 ├── utils/                      # Core Python package (the logic "engine")
 │   ├── collection/             # Modules for downloading and parsing
 │   ├── exploration/            # Modules for EDA and visualization (both raw data and preprocessed)
+│   ├── data_load /             # Modules for load the data from the splitting (personalized for each task)
 │   ├── models/                 # Modules for Models implementation
 │   ├── comparison/             # Modules for Models comparison across subjects
+│   ├── interpretability/       # Modules for Models interpretability (general and adaptable for all models)
+│   ├── model_io.py             # Modules for Models export and import (save and load the models classes)
 │   └── __init__.py             # Makes 'utils' an importable package
 │
 │   
