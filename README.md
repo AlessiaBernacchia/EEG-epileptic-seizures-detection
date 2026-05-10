@@ -51,7 +51,7 @@ The project will be organized into a clear and modular pipeline, with separate s
 1. [**Setup and Environment**](doc/setup_env.md)
 2. [**Data Download and Preprocessing**](doc/data_preprocessing.md)
 3. [**Run Models & Implementation Info**](doc/models_implementation.md)
-4. [**Cross-subjects generalization Evaluation**](doc/cross_subjects_eval.md)
+4. [**Models & Cross-subjects Generalization Evaluation**](doc/cross_subjects_eval.md)
 5. [**Interpretability**](doc/interpretability.md)
 
 ## Conclusions

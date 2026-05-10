@@ -30,7 +30,7 @@ From the Correlation Heatmap is interesting notice how the **Age and Number of S
 To make the data selection process more intentional, we focused on seizure information. We used a log scale to visualize the data more clearly and to allow for an easier comparison between individual patients and the global seizure duration. The data shows that **seizure duration is highly individual**; some patients experience much longer seizures than others, a factor that is also influenced by the total number of seizures recorded for each person.
 
 ## Dataset Selection
-[Notebook](../notebooks/collect_info.ipynb)
+[Notebook](../notebooks/collection/collection.ipynb)
 
 Instead of using the whole dataset, we select specific patients based on the meta-analysis (due the significant time to download them from the site, about 1.30h for each `.edf ` file). For each patient, we keep all files containing seizures and a subset of seizure-free files (maintaining a specific ratio where non-seizure time is greater than seizure time). This selection contains both seizure and non-seizure data, which is crucial for training effective classification models. The selected records are organized and stored in a structured format for subsequent preprocessing and analysis steps.
 
@@ -41,7 +41,7 @@ We decided to select four subjects based on our analysis of seizure durations. W
 - To ensure diversity in our sample, we also selected two older patients: ***Subject 4***, a 22-year-old male, and ***Subject 19***, a 19-year-old female.
 
 ## Signal Processing
-[Notebook](../notebooks/data_preprocessing.ipynb)
+[Notebook](../notebooks/preprocessing/preprocessing.ipynb)
 
 The preprocessing phase automates the transformation of high-volume raw signals into structured datasets suitable for Machine Learning models.
 
@@ -123,9 +123,11 @@ The goal of this task is to predict the "Pre-Ictal" state, the window of time wh
 We explored the chb12 dataset by analyzing both individual files and the concatenated global training set. This audit provided a crucial understanding of our data distribution across the pipeline.
 
 **Pre-splitting**
+
 ![Pre-Splitting Class Distribution](src/splitting/pre_splitting_class_distr.png)
 
 **Task1**
+
 <p align="center">
   <img src="src/splitting/task1_train_class_distr.png" width="32%" />
   <img src="src/splitting/task1_val_class_distr.png" width="32%" />
@@ -133,6 +135,7 @@ We explored the chb12 dataset by analyzing both individual files and the concate
 </p>
 
 **Task2**
+
 <p align="center">
   <img src="src/splitting/task2_train_class_distr.png" width="32%" />
   <img src="src/splitting/task2_val_class_distr.png" width="32%" />
